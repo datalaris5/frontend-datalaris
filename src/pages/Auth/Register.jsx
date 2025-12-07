@@ -2,8 +2,11 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Lock, Mail, User, Rocket } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import FeatureNotReady from "../components/common/FeatureNotReady";
+import { useAuth } from "../../context/AuthContext";
+import FeatureNotReady from "../../components/common/FeatureNotReady";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const AuthRegister = () => {
   const [name, setName] = useState("");
@@ -16,24 +19,18 @@ const AuthRegister = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     await register(name, email, password);
-    toast.success("Akun berhasil dibuat! Selamat datang.", {
-      style: {
-        borderRadius: "10px",
-        background: "#333",
-        color: "#fff",
-      },
-    });
-    navigate("/dashboard");
+    toast.success("Akun berhasil dibuat! Selamat datang.");
+    navigate("/overview");
   };
 
   return (
-    <div className="h-screen flex bg-white dark:bg-gray-900 transition-colors overflow-hidden">
+    <div className="h-screen flex transition-colors overflow-hidden">
       {/* Left Side - Hero Image/Content (Swapped for variety) */}
       <div className="hidden md:flex w-1/2 bg-gradient-to-br from-blue-900 to-slate-900 p-12 items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1615&q=80')] opacity-20 bg-cover bg-center"></div>
         <div className="relative z-10 text-white max-w-lg text-center">
           <div className="mb-8 flex justify-center">
-            <div className="h-20 w-20 bg-white/10 backdrop-blur-lg rounded-full flex items-center justify-center border border-white/20">
+            <div className="h-20 w-20 glass-icon rounded-full flex items-center justify-center">
               <Rocket size={40} className="text-blue-300" />
             </div>
           </div>
@@ -51,10 +48,10 @@ const AuthRegister = () => {
       <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center md:text-left">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
               Buat Akun Baru
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               Lengkapi data diri Anda untuk mendaftar.
             </p>
           </div>
@@ -64,57 +61,54 @@ const AuthRegister = () => {
             overlay={true}
           >
             <form onSubmit={handleRegister} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Nama Lengkap
-                </label>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nama Lengkap</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <User className="h-5 w-5 text-gray-400" />
                   </div>
-                  <input
+                  <Input
+                    id="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-all"
+                    className="pl-10 h-12 rounded-xl"
                     placeholder="Nama Anda"
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Email
-                </label>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-gray-400" />
                   </div>
-                  <input
+                  <Input
+                    id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-all"
+                    className="pl-10 h-12 rounded-xl"
                     placeholder="nama@email.com"
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password
-                </label>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Lock className="h-5 w-5 text-gray-400" />
                   </div>
-                  <input
+                  <Input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-all"
+                    className="pl-10 pr-10 h-12 rounded-xl"
                     placeholder="••••••••"
                     required
                   />
@@ -132,29 +126,28 @@ const AuthRegister = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Nama Toko (Otomatis)
-                </label>
+              <div className="space-y-2">
+                <Label htmlFor="store-name">Nama Toko (Otomatis)</Label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-400">🏪</span>
                   </div>
-                  <input
+                  <Input
+                    id="store-name"
                     type="text"
                     disabled
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 cursor-not-allowed"
+                    className="pl-10 h-12 rounded-xl bg-muted text-muted-foreground cursor-not-allowed"
                     placeholder="Diisi setelah email diverifikasi"
                   />
                 </div>
               </div>
 
-              <button
+              <Button
                 type="submit"
-                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-gray-900 hover:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 transform transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full h-12 text-md font-bold rounded-xl"
               >
                 Daftar Sekarang
-              </button>
+              </Button>
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
@@ -167,10 +160,11 @@ const AuthRegister = () => {
                 </div>
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 disabled
-                className="w-full flex items-center justify-center py-3.5 px-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all opacity-60 cursor-not-allowed"
+                className="w-full h-12 rounded-xl opacity-60 cursor-not-allowed"
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path
@@ -191,7 +185,7 @@ const AuthRegister = () => {
                   />
                 </svg>
                 Google (Coming Soon)
-              </button>
+              </Button>
             </form>
           </FeatureNotReady>
 
@@ -199,7 +193,7 @@ const AuthRegister = () => {
             Sudah punya akun?{" "}
             <Link
               to="/login"
-              className="font-bold text-blue-600 hover:text-blue-500"
+              className="font-bold text-primary hover:text-blue-500"
             >
               Masuk di sini
             </Link>
