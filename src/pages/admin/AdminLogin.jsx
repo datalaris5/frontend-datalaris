@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { api } from '../../services/api';
-import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import { api } from "../../services/api";
+import { useNavigate } from "react-router-dom";
+import { Shield, Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: "",
+    password: "",
   });
 
   const handleChange = (e) => {
@@ -21,20 +21,21 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      const response = await api.auth.adminLogin({
+      // Use unified login for now
+      const response = await api.auth.login({
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       });
 
       // Store token
-      localStorage.setItem('token', response.data.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      localStorage.setItem("token", response.data.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data.data.user));
 
-      toast.success('Welcome back, Superadmin!');
-      navigate('/admin/builder');
+      toast.success("Welcome back, Superadmin!");
+      navigate("/admin/builder");
     } catch (error) {
-      console.error('Login error:', error);
-      toast.error(error.response?.data?.message || 'Invalid credentials');
+      console.error("Login error:", error);
+      toast.error(error.response?.data?.message || "Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -49,7 +50,7 @@ const AdminLogin = () => {
               <Shield size={32} />
             </div>
           </div>
-          
+
           <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2">
             Admin Console
           </h2>
@@ -114,7 +115,7 @@ const AdminLogin = () => {
             </button>
           </form>
         </div>
-        
+
         <div className="px-8 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Restricted Area. Unauthorized access is prohibited.
