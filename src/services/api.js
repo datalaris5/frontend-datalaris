@@ -68,23 +68,11 @@ export const api = {
     lov: () => apiClient.get("/admin/marketplaces/lov"),
   },
   upload: {
-    // Helper to determine endpoint based on platform and type
-    send: (platform, type, formData) => {
-      // Backend route: auth.POST("/upload/:id", controllers.UploadExcel)
-      // We need to know what :id represents here. It might be marketplace ID or store ID?
-      // Looking at routes.go: auth.POST("/upload/:id", controllers.UploadExcel)
-      // Let's assume for now :id is related to the entity being uploaded to.
-      // But standard frontend upload usually sends file.
-      // Let's keep it generic or check usage.
-      // For now, mapping to the most likely route.
-
-      let endpoint = `/admin/upload/1`; // Placeholder ID, needs to be dynamic based on context
-
-      // If the usage in DataUpload.jsx passes an ID, we should use it.
-      // Current api.js signature: send: (platform, type, formData) => ...
-      // We might need to update the calling code or overload this.
-
-      return apiClient.post(endpoint, formData, {
+    send: (platform, type, formData, storeId) => {
+      if (!storeId) {
+        return Promise.reject(new Error("Store ID is required"));
+      }
+      return apiClient.post(`/admin/upload/${storeId}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
     },
