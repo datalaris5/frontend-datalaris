@@ -18,6 +18,7 @@ import {
   Line,
 } from "recharts";
 import FeatureNotReady from "../../components/common/FeatureNotReady";
+import { Badge } from "@/components/ui/badge";
 
 const AdminDashboard = () => {
   const data = [
@@ -81,26 +82,19 @@ const AdminDashboard = () => {
           {stats.map((stat, index) => {
             const Icon = stat.icon;
             return (
-              <div
-                key={index}
-                className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
-              >
+              <div key={index} className="glass-card p-6 rounded-2xl shadow-sm">
                 <div className="flex justify-between items-start mb-4">
-                  <div
-                    className={`p-3 rounded-xl bg-${stat.color}-100 dark:bg-${stat.color}-900/30 text-${stat.color}-600 dark:text-${stat.color}-400`}
-                  >
+                  <div className="p-3 rounded-xl bg-primary/10 text-primary">
                     <Icon size={24} />
                   </div>
-                  <span className="text-sm font-medium text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-lg">
+                  <Badge variant="success" className="px-2 py-1">
                     {stat.change}
-                  </span>
+                  </Badge>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                <h3 className="text-2xl font-bold text-foreground mb-1">
                   {stat.value}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {stat.label}
-                </p>
+                <p className="text-sm text-muted-foreground">{stat.label}</p>
               </div>
             );
           })}
@@ -108,7 +102,7 @@ const AdminDashboard = () => {
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="glass-card p-6 rounded-2xl shadow-sm">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
               Revenue Growth
             </h3>
@@ -118,25 +112,34 @@ const AdminDashboard = () => {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#f3f4f6"
+                    stroke="hsl(var(--border))"
                   />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} />
                   <YAxis axisLine={false} tickLine={false} />
-                  <Tooltip />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      borderColor: 'hsl(var(--border))',
+                      borderRadius: '12px',
+                      color: 'hsl(var(--foreground))',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="value"
-                    stroke="#f97316"
+                    stroke="hsl(var(--primary))"
                     strokeWidth={3}
-                    dot={{ r: 4 }}
+                    dot={{ r: 4, fill: "hsl(var(--primary))" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
+          <div className="glass-card p-6 rounded-2xl shadow-sm">
+            <h3 className="text-lg font-bold text-foreground mb-6">
               User Activity
             </h3>
             <div className="h-80">
@@ -145,12 +148,21 @@ const AdminDashboard = () => {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#f3f4f6"
+                    stroke="hsl(var(--border))"
                   />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} />
                   <YAxis axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: "transparent" }} />
-                  <Bar dataKey="value" fill="#f97316" radius={[4, 4, 0, 0]} />
+                  <Tooltip 
+                    cursor={{ fill: "hsl(var(--muted)/0.2)" }}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      borderColor: 'hsl(var(--border))',
+                      borderRadius: '12px',
+                      color: 'hsl(var(--foreground))',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
+                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

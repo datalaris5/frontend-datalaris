@@ -1,8 +1,12 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Lock, Mail, TrendingUp } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { Eye, EyeOff, Mail, TrendingUp, Lock } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const AuthLogin = () => {
   const [email, setEmail] = useState("");
@@ -15,66 +19,58 @@ const AuthLogin = () => {
     e.preventDefault();
     try {
       await login(email, password);
-      toast.success("Login berhasil! Selamat datang kembali.", {
-        style: {
-          borderRadius: "10px",
-          background: "#333",
-          color: "#fff",
-        },
-      });
-      navigate("/dashboard");
+      toast.success("Login berhasil! Selamat datang kembali.");
+      navigate("/overview");
     } catch (error) {
       toast.error("Login gagal. Periksa email dan password Anda.");
     }
   };
 
   return (
-    <div className="h-screen flex bg-white dark:bg-gray-900 transition-colors overflow-hidden">
+    <div className="h-screen flex transition-colors overflow-hidden">
       {/* Left Side - Form */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center md:text-left">
-            <h1 className="text-3xl font-bold text-orange-600 mb-2">
+            <h1 className="text-3xl font-bold text-primary mb-2">
               Selamat Datang Kembali!
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               Masuk untuk mengelola dan memantau performa toko Anda.
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-gray-400" />
                 </div>
-                <input
+                <Input
+                  id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-all"
+                  className="pl-10 h-12 rounded-xl"
                   placeholder="nama@email.com"
                   required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Password
-              </label>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
-                <input
+                <Input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 transition-all"
+                  className="pl-10 pr-10 h-12 rounded-xl"
                   placeholder="••••••••"
                   required
                 />
@@ -93,33 +89,29 @@ const AuthLogin = () => {
             </div>
 
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                />
-                <label
+              <div className="flex items-center space-x-2">
+                <Checkbox id="remember-me" />
+                <Label
                   htmlFor="remember-me"
-                  className="ml-2 block text-gray-700 dark:text-gray-300"
+                  className="text-gray-700 dark:text-gray-300 cursor-pointer"
                 >
                   Ingat saya
-                </label>
+                </Label>
               </div>
               <a
                 href="#"
-                className="text-orange-600 hover:text-orange-700 font-medium"
+                className="text-primary hover:text-orange-700 font-medium"
               >
                 Lupa password?
               </a>
             </div>
 
-            <button
+            <Button
               type="submit"
-              className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transform transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full h-12 text-md font-bold rounded-xl"
             >
               Masuk
-            </button>
+            </Button>
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
@@ -132,10 +124,11 @@ const AuthLogin = () => {
               </div>
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="outline"
               disabled
-              className="w-full flex items-center justify-center py-3.5 px-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all opacity-60 cursor-not-allowed"
+              className="w-full h-12 rounded-xl opacity-60 cursor-not-allowed"
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <path
@@ -156,14 +149,14 @@ const AuthLogin = () => {
                 />
               </svg>
               Google (Coming Soon)
-            </button>
+            </Button>
           </form>
 
           <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
             Belum punya akun?{" "}
             <Link
               to="/register"
-              className="font-bold text-orange-600 hover:text-orange-500"
+              className="font-bold text-primary hover:text-orange-500"
             >
               Daftar sekarang
             </Link>

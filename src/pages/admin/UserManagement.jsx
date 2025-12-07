@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Users, Plus, Search, Edit, Trash2, Shield, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import FeatureNotReady from "../../components/common/FeatureNotReady";
 
@@ -63,7 +65,7 @@ const UserManagement = () => {
         overlay={true}
       >
         {/* Search */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="glass-card p-4 rounded-2xl mb-6">
           <div className="relative">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -80,7 +82,7 @@ const UserManagement = () => {
         </div>
 
         {/* Users Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="glass-card rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
@@ -106,40 +108,40 @@ const UserManagement = () => {
                 {users.map((user) => (
                   <tr
                     key={user.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    className="hover:bg-muted/30 transition-colors"
                   >
                     <td className="px-6 py-4">
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-white">
+                        <div className="font-medium text-foreground">
                           {user.name}
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                        <div className="text-sm text-muted-foreground">
                           {user.email}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                      <Badge variant="info" className="gap-1">
                         <Shield size={12} />
                         {user.role}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="px-6 py-4 text-gray-900 dark:text-white">
-                      {user.stores}
-                    </td>
+                    <td className="px-6 py-4 text-foreground">{user.stores}</td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                        {user.status}
-                      </span>
+                      <Badge variant="success">{user.status}</Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                          <Edit size={16} />
-                        </button>
-                        <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                        <Button variant="ghost" size="icon">
+                          <Edit size={16} className="text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

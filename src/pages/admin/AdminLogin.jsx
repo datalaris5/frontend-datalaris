@@ -43,28 +43,28 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="max-w-md w-full glass-card rounded-2xl shadow-xl overflow-hidden">
         <div className="p-8">
           <div className="flex justify-center mb-6">
-            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-full text-orange-600">
+            <div className="p-3 brand-icon-soft rounded-full">
               <Shield size={32} />
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2">
+          <h2 className="text-2xl font-bold text-center text-foreground mb-2">
             Admin Console
           </h2>
-          <p className="text-center text-gray-500 dark:text-gray-400 mb-8">
+          <p className="text-center text-muted-foreground mb-8">
             Secure access for Datalaris Superadmin
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Email Address
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
                   <Mail size={18} />
                 </div>
                 <input
@@ -72,7 +72,7 @@ const AdminLogin = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                   placeholder="admin@datalaris.com"
                   required
                 />
@@ -80,11 +80,11 @@ const AdminLogin = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
                   <Lock size={18} />
                 </div>
                 <input
@@ -92,7 +92,7 @@ const AdminLogin = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -102,7 +102,7 @@ const AdminLogin = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center py-3 px-4 rounded-xl text-white bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all font-medium disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center py-3 px-4 rounded-xl text-white brand-gradient hover:opacity-90 brand-shadow hover:shadow-xl hover:shadow-orange-500/30 transition-all font-medium disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <Loader2 size={20} className="animate-spin" />
@@ -116,7 +116,7 @@ const AdminLogin = () => {
           </form>
         </div>
 
-        <div className="px-8 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 text-center">
+        <div className="px-8 py-4 bg-muted/30 border-t border-border/50 text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Restricted Area. Unauthorized access is prohibited.
           </p>

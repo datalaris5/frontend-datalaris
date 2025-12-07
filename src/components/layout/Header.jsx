@@ -1,5 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { Bell, Search, ShoppingBag, Store, ChevronDown } from "lucide-react";
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Bell,
+  Search,
+  ShoppingBag,
+  Store,
+  ChevronDown,
+  User,
+  LogOut,
+  Settings,
+  CreditCard,
+} from "lucide-react";
 import { ShopeeLogo, TikTokLogo } from "../Icons";
 import { useAuth } from "../../context/AuthContext";
 import { useFilter } from "../../context/FilterContext";
@@ -7,237 +18,291 @@ import ThemeToggle from "../ThemeToggle";
 import DateRangePicker from "../common/DateRangePicker";
 import toast from "react-hot-toast";
 
+// Shadcn UI
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+
 const Header = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { platform, setPlatform, store, setStore, stores, getMarketplaceName } =
     useFilter();
+  const navigate = useNavigate();
 
   const getStoreDisplayName = (s) => {
-    // Robust access to properties
-    const sName = s.Name || s.name || "Unnamed Store";
-    const sMpId = s.MarketplaceID || s.marketplace_id;
-    const mpName = getMarketplaceName(sMpId);
-    return `${mpName} - ${sName}`;
+    return s.Name || s.name || "Unnamed Store";
   };
 
   const selectedStore =
-    store === "all" ? null : stores.find((s) => (s.ID || s.id) == store); // Loose equality for string/number match
-
+    store === "all" ? null : stores.find((s) => (s.ID || s.id) == store);
   const selectedStoreName = selectedStore
     ? getStoreDisplayName(selectedStore)
     : "Semua Toko";
 
-  return (
-    <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between px-6 sticky top-0 z-40 transition-colors">
-      <div className="flex items-center gap-4">
-        {/* Platform Selector */}
-        <div className="relative group">
-          <button className="flex items-center justify-between gap-2 px-3 py-2 w-[260px] bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-700 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div
-                className={`p-1.5 rounded-lg ${
-                  platform === "shopee"
-                    ? "bg-orange-50"
-                    : platform === "tiktok-tokopedia"
-                    ? "bg-gray-50"
-                    : "bg-blue-50"
-                }`}
-              >
-                {platform === "shopee" ? (
-                  <ShopeeLogo className="w-5 h-5" />
-                ) : platform === "tiktok-tokopedia" ? (
-                  <TikTokLogo className="w-5 h-5" />
-                ) : (
-                  <ShoppingBag size={18} className="text-blue-600" />
-                )}
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                  Platform
-                </span>
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 capitalize leading-tight">
-                  {platform === "all"
-                    ? "Semua Platform"
-                    : platform === "tiktok-tokopedia"
-                    ? "TikTok Shop x Tokopedia"
-                    : platform}
-                </span>
-              </div>
-            </div>
-            <ChevronDown size={16} className="text-gray-400" />
-          </button>
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
-          {/* Dropdown */}
-          <div className="absolute top-full left-0 w-full pt-2 hidden group-hover:block z-20">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 animate-fade-in">
-              <button
-                onClick={() =>
-                  toast("Fitur Multi-Platform segera hadir!", { icon: "🚧" })
-                }
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 flex items-center justify-between gap-2 cursor-not-allowed opacity-75"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600"></div>{" "}
-                  Semua Platform
+  return (
+    <header className="h-16 glass-bar border-b flex items-center justify-between px-6 sticky top-0 z-40 transition-all duration-300 animate-fade-in shadow-sm">
+      <div className="flex items-center gap-3">
+        {/* Platform Selector */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="filter"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+            >
+              <div className="flex items-center gap-3 overflow-hidden text-left">
+                <div
+                  className={`p-2 rounded-xl transition-colors ${
+                    platform === "shopee"
+                      ? "bg-orange-50 text-orange-600 group-hover:bg-orange-100"
+                      : platform === "tiktok-tokopedia"
+                      ? "bg-black/5 text-black dark:text-white group-hover:bg-black/10"
+                      : "bg-blue-50 text-blue-600 group-hover:bg-blue-100"
+                  }`}
+                >
+                  {platform === "shopee" ? (
+                    <ShopeeLogo className="w-5 h-5" />
+                  ) : platform === "tiktok-tokopedia" ? (
+                    <TikTokLogo className="w-5 h-5" />
+                  ) : (
+                    <Store size={20} />
+                  )}
                 </div>
-                <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">
-                  Soon
-                </span>
-              </button>
-              <button
-                onClick={() => setPlatform("shopee")}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
-              >
-                <ShopeeLogo className="w-5 h-5" /> Shopee
-              </button>
-              <button
-                onClick={() => setPlatform("tiktok-tokopedia")}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
-              >
-                <TikTokLogo className="w-5 h-5" /> TikTok Shop x Tokopedia
-              </button>
-            </div>
-          </div>
-        </div>
+                <div className="flex flex-col items-start gap-0.5 overflow-hidden">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider leading-none">
+                    Platform
+                  </span>
+                  <span className="text-sm font-bold truncate text-foreground/90 leading-tight">
+                    {platform === "all"
+                      ? "Semua Platform"
+                      : platform === "tiktok-tokopedia"
+                      ? "TikTok x Tokopedia"
+                      : "Shopee"}
+                  </span>
+                </div>
+              </div>
+              <ChevronDown
+                size={16}
+                className="text-muted-foreground/50 group-hover:text-foreground transition-colors"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[260px] p-2" align="start">
+            <DropdownMenuLabel className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
+              Pilih Platform
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="mb-1" />
+            <DropdownMenuItem
+              onClick={() => setPlatform("shopee")}
+              className={`cursor-pointer gap-3 p-2.5 rounded-lg focus:bg-orange-50 focus:text-orange-700 ${
+                platform === "shopee" ? "bg-orange-50 text-orange-700" : ""
+              }`}
+            >
+              <ShopeeLogo className="w-5 h-5" />
+              <span className="font-medium">Shopee</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setPlatform("tiktok-tokopedia")}
+              className={`cursor-pointer gap-3 p-2.5 rounded-lg focus:bg-gray-100 focus:text-gray-900 dark:focus:bg-gray-800 dark:focus:text-white ${
+                platform === "tiktok-tokopedia"
+                  ? "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white"
+                  : ""
+              }`}
+            >
+              <TikTokLogo className="w-5 h-5" />
+              <span className="font-medium">TikTok Shop x Tokopedia</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Store Selector */}
-        <div className="relative group">
-          <button className="flex items-center justify-between gap-2 px-3 py-2 w-[260px] bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-700 transition-all shadow-sm hover:shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700">
-                <Store size={18} className="text-gray-500 dark:text-gray-400" />
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                  Toko
-                </span>
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 leading-tight truncate max-w-[120px]">
-                  {selectedStoreName}
-                </span>
-              </div>
-            </div>
-            <ChevronDown size={16} className="text-gray-400" />
-          </button>
-
-          {/* Dropdown */}
-          <div className="absolute top-full left-0 w-full pt-2 hidden group-hover:block z-20">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 animate-fade-in">
-              <button
-                onClick={() => setStore("all")}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
-              >
-                Semua Toko
-              </button>
-              {stores.map((s) => (
-                <button
-                  key={s.ID || s.id}
-                  onClick={() => setStore(s.ID || s.id)}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="filter"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+            >
+              <div className="flex items-center gap-3 overflow-hidden text-left">
+                <div
+                  className={`p-2 rounded-xl transition-colors ${
+                    store === "all"
+                      ? "bg-blue-50 text-blue-600 group-hover:bg-blue-100"
+                      : "bg-orange-50 text-orange-600 group-hover:bg-orange-100"
+                  }`}
                 >
-                  {getStoreDisplayName(s)}
-                </button>
-              ))}
-              {stores.length === 0 && (
-                <div className="px-4 py-2 text-xs text-gray-400 italic">
-                  Belum ada toko
+                  <Store size={20} />
+                </div>
+                <div className="flex flex-col items-start gap-0.5 overflow-hidden">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider leading-none">
+                    Toko
+                  </span>
+                  <span className="text-sm font-bold truncate text-foreground/90 max-w-[160px] leading-tight">
+                    {selectedStoreName}
+                  </span>
+                </div>
+              </div>
+              <ChevronDown
+                size={16}
+                className="text-muted-foreground/50 group-hover:text-foreground transition-colors"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[260px] p-2" align="start">
+            <DropdownMenuLabel className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
+              Pilih Toko
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="mb-1" />
+            <DropdownMenuItem
+              onClick={() => setStore("all")}
+              className={`cursor-pointer font-medium p-2.5 rounded-lg mb-1 gap-3 focus:bg-orange-50 focus:text-orange-700 ${
+                store === "all" ? "bg-orange-50 text-orange-700" : ""
+              }`}
+            >
+              <Store className="w-5 h-5 text-muted-foreground/70" />
+              <span>Semua Toko</span>
+            </DropdownMenuItem>
+            <div className="max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted-foreground/20">
+              {stores.length > 0 ? (
+                stores.map((s) => (
+                  <DropdownMenuItem
+                    key={s.ID || s.id}
+                    onClick={() => setStore(s.ID || s.id)}
+                    className={`cursor-pointer p-2.5 rounded-lg gap-3 focus:bg-orange-50 focus:text-orange-700 ${
+                      store === (s.ID || s.id)
+                        ? "bg-orange-50 text-orange-700"
+                        : ""
+                    }`}
+                  >
+                    <Store className="w-5 h-5 text-muted-foreground/70" />
+                    <span className="font-medium truncate">
+                      {getStoreDisplayName(s)}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="p-4 text-xs text-muted-foreground text-center italic bg-muted/30 rounded-lg">
+                  Belum ada toko terhubung
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Date Range Picker */}
-        <DateRangePicker
-          maxDate={new Date(new Date().setDate(new Date().getDate() - 2))}
-          minDate={
-            window.location.pathname.includes("orders")
-              ? new Date(2025, 5, 1) // June 1, 2025 for Orders
-              : new Date(2024, 0, 1) // Jan 1, 2024 for others
-          }
-        />
+        <div className="hidden xl:block">
+          <DateRangePicker
+            maxDate={new Date(new Date().setDate(new Date().getDate() - 2))}
+            minDate={
+              window.location.pathname.includes("orders")
+                ? new Date(2025, 5, 1)
+                : new Date(2024, 0, 1)
+            }
+          />
+        </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center gap-3">
         <ThemeToggle />
-        <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 relative">
-          <Bell size={20} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
-        </button>
 
-        <div className="flex items-center space-x-3 pl-4 border-l border-gray-200 dark:border-gray-700 relative group">
-          <button className="flex items-center space-x-3 focus:outline-none">
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 border-2 ${
-                user?.subscription === "pro"
-                  ? "border-yellow-500"
-                  : user?.role === "admin"
-                  ? "border-red-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative w-10 h-10 rounded-full hover:bg-muted/50 transition-all"
+        >
+          <Bell size={20} className="text-muted-foreground" />
+          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-background"></span>
+        </Button>
+
+        {/* User Profile */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="pl-3 pr-4 h-12 hover:bg-muted/50 ml-2 gap-3 border border-transparent hover:border-border/50 transition-all group"
             >
-              <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                {/* Placeholder Icon */}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-5 h-5 text-gray-400 dark:text-gray-500"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+              <div
+                className={`p-0.5 rounded-xl border-2 transition-all group-hover:shadow-md ${
+                  user?.role === "admin"
+                    ? "border-red-500 shadow-red-500/20"
+                    : user?.subscription === "pro"
+                    ? "border-amber-500 shadow-amber-500/20"
+                    : "border-border shadow-gray-500/10"
+                }`}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={user?.avatar} />
+                  <AvatarFallback className="bg-muted text-muted-foreground">
+                    <User className="h-5 w-5" />
+                  </AvatarFallback>
+                </Avatar>
               </div>
-            </div>
-            <div className="hidden md:block text-left">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {user?.name || "User"}
-              </p>
-              <div className="flex items-center gap-1">
-                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                  {user?.role === "admin"
-                    ? "Super Admin"
-                    : user?.subscription || "Starter"}
-                </p>
-                {user?.subscription === "pro" && (
-                  <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                )}
+              <div className="flex flex-col items-start text-left hidden md:flex gap-0.5">
+                <span className="text-sm font-bold leading-none text-foreground/90">
+                  {user?.name || "User"}
+                </span>
+                <span className="text-[10px] text-muted-foreground leading-none font-medium capitalize flex items-center gap-1.5">
+                  {user?.role === "admin" ? (
+                    <span className="text-red-500">Super Admin</span>
+                  ) : (
+                    <span>{user?.subscription || "Starter"} Plan</span>
+                  )}
+                  {user?.subscription === "pro" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  )}
+                </span>
               </div>
-            </div>
-            <ChevronDown
-              size={14}
-              className="text-gray-400 group-hover:rotate-180 transition-transform duration-200"
-            />
-          </button>
-
-          {/* Profile Dropdown */}
-          <div className="absolute top-full right-0 pt-2 w-48 invisible opacity-0 translate-y-2 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-in-out delay-200 group-hover:delay-0 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1">
-              <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {user?.name}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              <ChevronDown
+                size={16}
+                className="text-muted-foreground/50 group-hover:text-foreground transition-colors ml-1"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="end">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user?.name}</p>
+                <p className="text-xs leading-none text-muted-foreground">
                   {user?.email}
                 </p>
               </div>
-              <a
-                href="/settings"
-                className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => navigate("/settings")}
+                className="cursor-pointer"
               >
-                Pengaturan Akun
-              </a>
-              <button
-                onClick={() => (window.location.href = "/login")}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-              >
-                Keluar
-              </button>
-            </div>
-          </div>
-        </div>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Pengaturan Akun</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <CreditCard className="mr-2 h-4 w-4" />
+                <span>Billing (Soon)</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Keluar</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
