@@ -5,15 +5,26 @@ export const UploadService = {
     if (!storeId) {
       return Promise.reject(new Error("Store ID is required"));
     }
-    return apiClient.post(`/admin/upload/${storeId}`, formData, {
+
+    let endpoint = "";
+    if (type === "overview") {
+      endpoint = `/admin/upload/tinjauan/${storeId}`;
+    } else if (type === "ads") {
+      endpoint = `/admin/upload/iklan/${storeId}`;
+    } else {
+      return Promise.reject(
+        new Error("Tipe data ini belum didukung untuk upload.")
+      );
+    }
+
+    return apiClient.post(endpoint, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
 
   getHistory: (storeId) => {
-    // Attempt to fetch history. Validating endpoint assumption.
     return apiClient.get(
-      `/admin/upload/history${
+      `/admin/history-data-upload${
         storeId && storeId !== "all" ? `?store_id=${storeId}` : ""
       }`
     );
