@@ -1,39 +1,60 @@
 import apiClient from "./axios";
 
 export const DashboardService = {
+  // Dashboard Tinjauan Endpoints
   totalPenjualan: (params) =>
     apiClient.post("/admin/dashboard-tinjauan/total-penjualan", params),
 
   totalPesanan: (params) =>
     apiClient.post("/admin/dashboard-tinjauan/total-pesanan", params),
 
-  // High-level methods used by DashboardOverview
+  totalPengunjung: (params) =>
+    apiClient.post("/admin/dashboard-tinjauan/total-pengunjung", params),
+
+  conversionRate: (params) =>
+    apiClient.post("/admin/dashboard-tinjauan/convertion-rate", params),
+
+  basketSize: (params) =>
+    apiClient.post("/admin/dashboard-tinjauan/basket-size", params),
+
+  trenPenjualan: (params) =>
+    apiClient.post("/admin/dashboard-tinjauan/tren-penjualan", params),
+
+  // High-level methods used by AdminDashboard
   getStats: async (params) => {
     try {
-      const [salesRes, ordersRes] = await Promise.all([
-        apiClient.post("/admin/dashboard-tinjauan/total-penjualan", params),
-        apiClient.post("/admin/dashboard-tinjauan/total-pesanan", params),
+      const [
+        conversionRes,
+        basketRes,
+        visitorsRes,
+        // salesRes, // Not requested for cards yet but good to have
+        // ordersRes,
+      ] = await Promise.all([
+        apiClient.post("/admin/dashboard-tinjauan/convertion-rate", params),
+        apiClient.post("/admin/dashboard-tinjauan/basket-size", params),
+        apiClient.post("/admin/dashboard-tinjauan/total-pengunjung", params),
       ]);
 
       return {
-        totalSales: salesRes.data.data?.total || 0,
-        totalOrders: ordersRes.data.data?.total || 0,
-        averageOrderValue: 0, // Calculate if possible
-        conversionRate: 0,
+        conversionRate: conversionRes.data.data,
+        basketSize: basketRes.data.data,
+        totalVisitors: visitorsRes.data.data,
+        // Mocking New Buyers as API is missing
+        totalNewBuyers: {
+          total: 0,
+          percent: 0,
+          trend: "Equal",
+          sparkline: [],
+        },
       };
     } catch (e) {
       console.error("Dashboard Stats Error", e);
-      return {
-        totalSales: 0,
-        totalOrders: 0,
-        averageOrderValue: 0,
-        conversionRate: 0,
-      };
+      throw e;
     }
   },
 
   getSalesChart: async (params) => {
-    // Mock chart data for now as backend might not have chart endpoint ready
+    // Keep mock for now or implement if needed
     return [
       { date: "Senin", amount: 1500000 },
       { date: "Selasa", amount: 2300000 },

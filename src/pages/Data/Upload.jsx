@@ -51,7 +51,7 @@ const DataUpload = () => {
       setLoadingHistory(true);
       try {
         const res = await api.upload.getHistory(store);
-        setHistory(res.data || []);
+        setHistory(res.data?.data || []);
       } catch (err) {
         console.error("Failed to fetch history:", err);
         // Fallback to empty or keep previous if any
@@ -127,7 +127,7 @@ const DataUpload = () => {
 
       // Refresh history
       const res = await api.upload.getHistory(store);
-      setHistory(res.data || []);
+      setHistory(res.data?.data || []);
 
       setTimeout(() => {
         setFile(null);

@@ -4,6 +4,7 @@ import { StoreService } from "./StoreService";
 import { MarketplaceService } from "./MarketplaceService";
 import { UploadService } from "./UploadService";
 import { DashboardService } from "./DashboardService";
+import { AdsService } from "./AdsService";
 
 export const api = {
   auth: AuthService,
@@ -12,6 +13,7 @@ export const api = {
   marketplaces: MarketplaceService,
   upload: UploadService,
   dashboard: DashboardService,
+  ads: AdsService,
   admin: {
     // Existing admin placeholders
     users: {
