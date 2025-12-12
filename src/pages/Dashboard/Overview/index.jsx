@@ -1,47 +1,66 @@
 import React, { useState, useEffect } from "react";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
   AreaChart,
   Area,
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
+  ReferenceLine,
+  Cell,
 } from "recharts";
 import {
-  DollarSign,
   ShoppingBag,
-  MousePointer,
+  Store,
   Users,
-  UserPlus,
-  UploadCloud,
+  DollarSign,
+  MousePointer,
+  Package,
+  Clock,
+  Upload,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useFilter } from "../../../context/FilterContext";
 import { api } from "../../../services/api";
 import FeatureNotReady from "../../../components/common/FeatureNotReady";
-import { format } from "date-fns";
-
-// Shadcn UI Components
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  format,
+  parseISO,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+} from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+import CountUp from "react-countup";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useNavigate } from "react-router-dom";
 
 const DashboardOverview = () => {
   const { store, stores, dateRange } = useFilter();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+
+  // Chart Tabs State
+  const [activeTab, setActiveTab] = useState("sales");
+
+  // Data States
+  const [salesMonthlyData, setSalesMonthlyData] = useState([]);
+  const [ordersDailyData, setOrdersDailyData] = useState([]);
+  const [avgDailyOrders, setAvgDailyOrders] = useState(0);
 
   // Metrics State
   const [metrics, setMetrics] = useState([
     {
       title: "Total Penjualan",
-      value: "Rp0",
+      value: 0,
+      format: "currency",
       trend: "0%",
       trendUp: true,
-      data: [],
+      data: [0, 0, 0, 0, 0, 0, 0],
       icon: DollarSign,
       highlight: true,
       isDummy: false,
@@ -49,250 +68,309 @@ const DashboardOverview = () => {
     },
     {
       title: "Total Pesanan",
-      value: "0",
+      value: 0,
+      format: "number",
       trend: "0%",
       trendUp: true,
-      data: [],
+      data: [0, 0, 0, 0, 0, 0, 0],
       icon: ShoppingBag,
       isDummy: false,
       color: "blue",
     },
     {
       title: "Convertion Rate",
-      value: "-",
+      value: 0,
+      format: "percent",
       trend: "0%",
       trendUp: false,
-      data: [],
+      data: [0, 0, 0, 0, 0, 0, 0],
       icon: MousePointer,
-      isDummy: true,
+      isDummy: false,
       color: "purple",
     },
     {
       title: "Basket Size",
-      value: "-",
+      value: 0,
+      format: "currency",
       trend: "0%",
       trendUp: true,
-      data: [],
+      data: [0, 0, 0, 0, 0, 0, 0],
       icon: ShoppingBag,
-      isDummy: true,
+      isDummy: false,
       color: "emerald",
     },
     {
       title: "Total Pengunjung",
-      value: "-",
+      value: 0,
+      format: "number",
       trend: "0%",
       trendUp: false,
-      data: [],
+      data: [0, 0, 0, 0, 0, 0, 0],
       icon: Users,
-      isDummy: true,
+      isDummy: false,
       color: "cyan",
     },
     {
-      title: "Total Pembeli Baru",
-      value: "-",
+      title: "Produk Terjual",
+      value: 0, // Placeholder
+      format: "number",
       trend: "0%",
-      trendUp: false,
-      data: [],
-      icon: UserPlus,
-      isDummy: true,
+      trendUp: true,
+      data: [0, 0, 0, 0, 0, 0, 0],
+      icon: Package,
+      isDummy: true, // Mark as dummy
       color: "pink",
     },
   ]);
 
-  const currentYear = new Date().getFullYear();
-  const lastYear = currentYear - 1;
+  // Helper to merge sparklines
+  const mergeSparklines = (base, incoming) => {
+    if (!incoming || incoming.length === 0) return base;
+    if (!base || base.length === 0) return incoming.map((i) => ({ ...i }));
 
-  const formatCurrency = (val) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(val);
+    // Create a map for faster lookup
+    const incomingMap = new Map(incoming.map((i) => [i.tanggal, i]));
 
-  // Fetch Metrics Data (With Manual Aggregation for 'All Stores')
+    return base.map((b) => {
+      const inc = incomingMap.get(b.tanggal) || { total: 0 };
+      return { ...b, total: Number(b.total) + Number(inc.total) };
+    });
+  };
+
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchStoreDetails = async (id) => {
+      const fromDate = dateRange?.startDate
+        ? format(dateRange.startDate, "yyyy-MM-dd")
+        : "";
+      const toDate = dateRange?.endDate
+        ? format(dateRange.endDate, "yyyy-MM-dd")
+        : "";
+
+      const payload = {
+        store_id: id,
+        date_from: fromDate,
+        date_to: toDate,
+      };
+
+      const [salesRes, ordersRes, visitorsRes, crRes, bsRes] =
+        await Promise.all([
+          api.dashboard.totalPenjualan(payload),
+          api.dashboard.totalPesanan(payload),
+          api.dashboard.totalPengunjung(payload),
+          api.dashboard.conversionRate(payload),
+          api.dashboard.basketSize(payload),
+        ]);
+
+      const extract = (res) => {
+        const data = res.data?.data || {};
+        const current = Number(data.total || 0);
+        const percent = Number(data.percent || 0);
+        const sparkline = data.sparkline || [];
+        return { current, percent, sparkline };
+      };
+
+      return {
+        sales: extract(salesRes),
+        orders: extract(ordersRes),
+        visitors: extract(visitorsRes),
+        cr: extract(crRes),
+        bs: extract(bsRes),
+      };
+    };
+
+    const loadData = async () => {
       setLoading(true);
       try {
-        const fromDate = dateRange?.startDate;
-        const toDate = dateRange?.endDate;
+        let aggSales = { current: 0, percent: 0, sparkline: [] };
+        let aggOrders = { current: 0, percent: 0, sparkline: [] };
+        let aggVisitors = { current: 0, percent: 0, sparkline: [] };
+        let aggCR = { current: 0, percent: 0, sparkline: [] };
+        let aggBS = { current: 0, percent: 0, sparkline: [] };
 
-        const dateParams = {
-          date_from: fromDate ? format(fromDate, "yyyy-MM-dd") : "",
-          date_to: toDate ? format(toDate, "yyyy-MM-dd") : "",
-        };
-
-        // Initialize Aggregates
-        let aggSales = { current: 0, previous: 0 };
-        let aggOrders = { current: 0, previous: 0 };
-        let aggVisitors = { current: 0, previous: 0 };
-
-        // Helper to fetch details including percent for a store
-        const fetchStoreDetails = async (id) => {
-          const params = { ...dateParams, store_id: id };
-          try {
-            const [salesRes, ordersRes, visitorsRes] = await Promise.all([
-              api.dashboard.totalPenjualan(params),
-              api.dashboard.totalPesanan(params),
-              api.dashboard.totalPengunjung(params),
-            ]);
-
-            const extract = (res) => {
-              const current = Number(res.data?.data?.total || 0);
-              const percent = Number(res.data?.data?.percent || 0);
-              // Reverse calculate previous value: Previous = Current / (1 + Percent/100)
-              // Handle edge case where percent is -100 (Previous was X, Current is 0) -> Formula breaks if Current is 0?
-              // Actually, if Current is 0, we can't easily know previous unless we check if percent is -100.
-              // But simpler formula: previous = current - (change), where change = previous * percent.
-              // Wait, standard: Change% = ((Curr - Prev)/Prev) * 100
-              // Curr = Prev * (1 + P/100)
-              // Prev = Curr / (1 + P/100)
-              // If Prev was 0, Percent is usually 0 or handled by backend as 100% if current > 0.
-
-              let previous = 0;
-              if (percent === 100 && current > 0)
-                previous = 0; // Pure growth from 0
-              else if (percent !== 0) previous = current / (1 + percent / 100);
-              else previous = current; // No change
-
-              return { current, percent, previous };
-            };
-
-            return {
-              sales: extract(salesRes),
-              orders: extract(ordersRes),
-              visitors: extract(visitorsRes),
-            };
-          } catch (e) {
-            console.error(`Error fetching stats for store ${id}`, e);
-            return {
-              sales: { current: 0, percent: 0, previous: 0 },
-              orders: { current: 0, percent: 0, previous: 0 },
-              visitors: { current: 0, percent: 0, previous: 0 },
-            };
-          }
-        };
-
+        let targetStores = [];
         if (store === "all") {
-          // --- AGGREGATION LOGIC ---
-          const activeStores = stores.filter((s) => s.IsActive !== false);
-          if (activeStores.length > 0) {
-            const results = await Promise.all(
-              activeStores.map((s) => fetchStoreDetails(s.ID || s.id))
-            );
-
-            results.forEach((res) => {
-              aggSales.current += res.sales.current;
-              aggSales.previous += res.sales.previous;
-
-              aggOrders.current += res.orders.current;
-              aggOrders.previous += res.orders.previous;
-
-              aggVisitors.current += res.visitors.current;
-              aggVisitors.previous += res.visitors.previous;
-            });
-          }
+          targetStores = stores.filter((s) => s && s.id);
         } else {
-          // --- SINGLE STORE LOGIC ---
-          const res = await fetchStoreDetails(store);
-          aggSales = res.sales;
-          aggOrders = res.orders;
-          aggVisitors = res.visitors;
+          targetStores = [{ id: store }];
         }
 
-        // --- CALCULATE FINAL GROWTH TRENDS ---
-        const calculateTrend = (current, previous) => {
-          if (previous === 0) return current > 0 ? 100 : 0;
-          return ((current - previous) / previous) * 100;
-        };
+        if (targetStores.length === 0) {
+          setLoading(false);
+          return;
+        }
 
-        const salesGrowth = calculateTrend(aggSales.current, aggSales.previous);
-        const ordersGrowth = calculateTrend(
-          aggOrders.current,
-          aggOrders.previous
+        const results = await Promise.all(
+          targetStores.map((s) => fetchStoreDetails(s.id))
         );
 
-        // Visitors Trend
-        // Note: For single store, the API technically returns the exact percent, but recalculating it ensures consistency with "All Stores".
-        // Small floating point differences might occur, but acceptable for UI display.
-        const visitorsGrowth = calculateTrend(
-          aggVisitors.current,
-          aggVisitors.previous
-        );
+        results.forEach((res, idx) => {
+          aggSales.current += res.sales.current;
+          aggOrders.current += res.orders.current;
+          aggVisitors.current += res.visitors.current;
 
-        // Derived Metrics: Conversion Rate
-        const currentCR =
+          if (idx === 0) {
+            aggSales.sparkline = res.sales.sparkline || [];
+            aggOrders.sparkline = res.orders.sparkline || [];
+            aggVisitors.sparkline = res.visitors.sparkline || [];
+          } else {
+            aggSales.sparkline = mergeSparklines(
+              aggSales.sparkline,
+              res.sales.sparkline
+            );
+            aggOrders.sparkline = mergeSparklines(
+              aggOrders.sparkline,
+              res.orders.sparkline
+            );
+            aggVisitors.sparkline = mergeSparklines(
+              aggVisitors.sparkline,
+              res.visitors.sparkline
+            );
+          }
+        });
+
+        // Recalculate Derived Metrics
+        aggBS.current =
+          aggOrders.current > 0 ? aggSales.current / aggOrders.current : 0;
+        aggCR.current =
           aggVisitors.current > 0
             ? (aggOrders.current / aggVisitors.current) * 100
             : 0;
-        const previousCR =
-          aggVisitors.previous > 0
-            ? (aggOrders.previous / aggVisitors.previous) * 100
-            : 0;
-        const crGrowth = calculateTrend(currentCR, previousCR);
 
-        // Derived Metrics: Basket Size
-        const currentBS =
-          aggOrders.current > 0 ? aggSales.current / aggOrders.current : 0;
-        const previousBS =
-          aggOrders.previous > 0 ? aggSales.previous / aggOrders.previous : 0;
-        const bsGrowth = calculateTrend(currentBS, previousBS);
+        // Recalculate Sparklines for Derived Metrics
+        if (aggSales.sparkline.length > 0 && aggOrders.sparkline.length > 0) {
+          // Ensure lengths match or handle mismatch
+          aggBS.sparkline = aggSales.sparkline.map((s, i) => {
+            const o = aggOrders.sparkline.find(
+              (x) => x.tanggal === s.tanggal
+            ) || { total: 0 };
+            return {
+              tanggal: s.tanggal,
+              total:
+                Number(o.total) > 0 ? Number(s.total) / Number(o.total) : 0,
+            };
+          });
+        }
 
-        // Update UI State
+        if (
+          aggOrders.sparkline.length > 0 &&
+          aggVisitors.sparkline.length > 0
+        ) {
+          aggCR.sparkline = aggVisitors.sparkline.map((v, i) => {
+            const o = aggOrders.sparkline.find(
+              (x) => x.tanggal === v.tanggal
+            ) || { total: 0 };
+            return {
+              tanggal: v.tanggal,
+              total:
+                Number(v.total) > 0
+                  ? (Number(o.total) / Number(v.total)) * 100
+                  : 0,
+            };
+          });
+        }
+
+        // Dummy Growth Data (Since we don't have prev period in this context yet)
+        const growth = { sales: 0, orders: 0, cr: 0, bs: 0, visitors: 0 };
+
+        // Update Metrics UI
         setMetrics((prev) => {
           const newMetrics = [...prev];
-
-          const updateMetric = (index, value, growth, prefix = "") => {
-            const isUp = growth >= 0;
-            newMetrics[index] = {
-              ...newMetrics[index],
-              value: value,
-              trend: `${Math.abs(growth).toFixed(1)}%`,
-              trendUp: isUp,
+          const update = (idx, dataObj, fmt, trend) => {
+            const sparkline = dataObj.sparkline || [];
+            newMetrics[idx] = {
+              ...newMetrics[idx],
+              value: dataObj.current,
+              format: fmt,
+              trend: `${trend.toFixed(1)}%`,
+              trendUp: trend >= 0,
+              data:
+                sparkline.length > 0
+                  ? sparkline.map((d) => Number(d.total))
+                  : [0, 0, 0, 0, 0, 0, 0],
               isDummy: false,
             };
           };
 
-          // 1. Total Penjualan
-          updateMetric(0, formatCurrency(aggSales.current), salesGrowth);
-
-          // 2. Total Pesanan
-          updateMetric(1, aggOrders.current.toString(), ordersGrowth);
-
-          // 3. Conversion Rate
-          updateMetric(2, `${currentCR.toFixed(2)}%`, crGrowth);
-
-          // 4. Basket Size
-          updateMetric(3, formatCurrency(currentBS), bsGrowth);
-
-          // 5. Total Pengunjung
-          updateMetric(
-            4,
-            aggVisitors.current.toLocaleString("id-ID"),
-            visitorsGrowth
-          );
-
-          // 6. Total Pembeli Baru (Still Dummy)
-          newMetrics[5] = { ...newMetrics[5], value: "0", isDummy: true };
+          update(0, aggSales, "currency", growth.sales);
+          update(1, aggOrders, "number", growth.orders);
+          update(2, aggCR, "percent", growth.cr);
+          update(3, aggBS, "currency", growth.bs);
+          update(4, aggVisitors, "number", growth.visitors);
 
           return newMetrics;
         });
+
+        // --- Process Chart Data ---
+
+        // 1. Process Order Data (Daily)
+        if (aggOrders.sparkline && aggOrders.sparkline.length > 0) {
+          const dailyOrders = aggOrders.sparkline
+            .map((d) => ({
+              date: d.tanggal,
+              displayDate: format(parseISO(d.tanggal), "dd MMM"),
+              total: Number(d.total),
+            }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+          setOrdersDailyData(dailyOrders);
+
+          // Calculate Average
+          const totalOrders = dailyOrders.reduce(
+            (sum, item) => sum + item.total,
+            0
+          );
+          setAvgDailyOrders(
+            dailyOrders.length > 0
+              ? Math.round(totalOrders / dailyOrders.length)
+              : 0
+          );
+        } else {
+          setOrdersDailyData([]);
+          setAvgDailyOrders(0);
+        }
+
+        // 2. Process Sales Data (Monthly Aggregation)
+        if (aggSales.sparkline && aggSales.sparkline.length > 0) {
+          const monthlyMap = new Map();
+
+          aggSales.sparkline.forEach((d) => {
+            // Ensure date is valid
+            if (!d.tanggal) return;
+            const date = parseISO(d.tanggal);
+            const monthKey = format(date, "MMM yyyy", { locale: idLocale }); // e.g., "Jan 2024"
+
+            const currentTotal = monthlyMap.get(monthKey) || 0;
+            monthlyMap.set(monthKey, currentTotal + Number(d.total));
+          });
+
+          // Convert Map to Array
+          const monthlyData = Array.from(monthlyMap.entries()).map(
+            ([month, total]) => ({
+              month,
+              total,
+            })
+          ); // Map order depends on insertion, ideally should sort if data spans years
+
+          setSalesMonthlyData(monthlyData);
+        } else {
+          setSalesMonthlyData([]);
+        }
       } catch (error) {
-        console.error("Dashboard Fetch Error:", error);
+        console.error("Overview Fetch Error:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    if (dateRange?.startDate && dateRange?.endDate) {
-      fetchDashboardData();
+    if (dateRange?.startDate) {
+      loadData();
     }
   }, [store, stores, dateRange]);
 
   return (
-    <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in">
+    <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in pb-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-none">
+      <div className="flex items-center justify-between flex-none pt-1">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Dashboard Tinjauan
@@ -301,373 +379,381 @@ const DashboardOverview = () => {
             Ringkasan performa toko Anda
           </p>
         </div>
-        <div className="flex space-x-3">
-          <Button
-            asChild
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25 transition-all duration-300"
+        <div className="flex items-center gap-2">
+          {/* Upload Data Button */}
+          <button
+            onClick={() => navigate("/upload")}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
           >
-            <Link to="/upload">
-              <UploadCloud size={16} className="mr-2" />
-              Upload Data
-            </Link>
-          </Button>
+            <Upload size={18} strokeWidth={2.5} />
+            <span className="font-bold text-sm">Upload Data</span>
+          </button>
         </div>
       </div>
 
-      {/* Metric Cards Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 flex-none">
-        {metrics.map((metric, index) => {
-          const colorThemes = {
-            orange: {
-              iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
-              iconText: "text-white",
-              accent: "#f97316",
-              accentClass: "from-orange-500 to-orange-500/80",
-            },
-            blue: {
-              iconBg: "bg-gradient-to-br from-blue-500 to-indigo-500",
-              iconText: "text-white",
-              accent: "#3b82f6",
-              accentClass: "from-blue-500 to-blue-500/80",
-            },
-            purple: {
-              iconBg: "bg-gradient-to-br from-purple-500 to-violet-500",
-              iconText: "text-white",
-              accent: "#a855f7",
-              accentClass: "from-purple-500 to-purple-500/80",
-            },
-            emerald: {
-              iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
-              iconText: "text-white",
-              accent: "#10b981",
-              accentClass: "from-emerald-500 to-emerald-500/80",
-            },
-            cyan: {
-              iconBg: "bg-gradient-to-br from-cyan-500 to-sky-500",
-              iconText: "text-white",
-              accent: "#06b6d4",
-              accentClass: "from-cyan-500 to-cyan-500/80",
-            },
-            pink: {
-              iconBg: "bg-gradient-to-br from-pink-500 to-rose-500",
-              iconText: "text-white",
-              accent: "#ec4899",
-              accentClass: "from-pink-500 to-pink-500/80",
-            },
-          };
-
-          const theme = colorThemes[metric.color] || colorThemes.orange;
-
-          return (
-            <div key={index} className="h-full">
-              <FeatureNotReady
-                blur={metric.isDummy}
-                overlay={metric.isDummy}
-                message="Segera Hadir"
-              >
-                <Card
-                  className={`relative overflow-hidden h-full transition-all duration-300 hover:scale-[1.02] rounded-2xl ${
-                    metric.highlight
-                      ? "bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 text-white border-transparent shadow-2xl shadow-orange-500/40 ring-1 ring-white/20"
-                      : "glass-card hover:shadow-2xl"
-                  }`}
-                >
-                  {!metric.highlight && (
-                    <div
-                      className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-gradient-to-b ${theme.accentClass}`}
-                    />
-                  )}
-
-                  <div
-                    className={`absolute -bottom-3 -right-3 opacity-[0.08] rotate-12 pointer-events-none`}
-                  >
-                    <metric.icon size={64} />
-                  </div>
-
-                  <div className="relative z-10 p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div
-                        className={`p-2.5 rounded-xl shadow-lg ${
-                          metric.highlight
-                            ? "bg-white/20 text-white shadow-white/10"
-                            : `${theme.iconBg} ${theme.iconText} shadow-${metric.color}-500/30`
-                        }`}
-                      >
-                        <metric.icon size={18} strokeWidth={2.5} />
-                      </div>
-                      <h3
-                        className={`text-xs font-semibold leading-tight ${
-                          metric.highlight
-                            ? "text-white/90"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {metric.title}
-                      </h3>
-                    </div>
-
-                    <p
-                      className={`text-2xl font-extrabold tracking-tight mb-2 ${
-                        metric.highlight ? "text-white" : "text-foreground"
-                      }`}
-                    >
-                      {metric.value}
-                    </p>
-
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                          metric.highlight
-                            ? "bg-white/20 text-white"
-                            : metric.trendUp
-                            ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                            : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
-                        }`}
-                      >
-                        {metric.trendUp ? "↑" : "↓"} {metric.trend}
-                      </span>
-
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={metric.data.map((v, i) => ({ i, v }))}
-                          >
-                            <Line
-                              type="monotone"
-                              dataKey="v"
-                              stroke={
-                                metric.highlight ? "#ffffff" : theme.accent
-                              }
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </FeatureNotReady>
-            </div>
-          );
-        })}
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-none">
+        {metrics.map((metric, index) => (
+          <MetricCard key={index} metric={metric} />
+        ))}
       </div>
 
-      {/* Charts Area - WAITING FOR API BACKEND */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Monthly Sales Trend - YoY Comparison */}
-        <SalesTrendChart storeId={store} stores={stores} />
+      {/* Content Grid */}
+      <div className="flex-1 min-h-0 flex flex-col gap-4">
+        {/* Main Charts Area (Tabbed) */}
+        <div className="h-full min-h-0 w-full">
+          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
+            <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg font-bold">
+                  Analisis Performa
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  tren penjualan, jumlah order, dan pertumbuhan
+                </p>
+              </div>
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="w-full sm:w-[400px]"
+              >
+                <TabsList className="grid w-full grid-cols-3 bg-white/5">
+                  <TabsTrigger value="sales">Penjualan</TabsTrigger>
+                  <TabsTrigger value="orders">Pesanan</TabsTrigger>
+                  <TabsTrigger value="yoy">YoY Growth</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+              <ResponsiveContainer width="100%" height="100%">
+                {activeTab === "sales" && (
+                  <AreaChart
+                    data={salesMonthlyData}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="colorSales"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#f97316"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#f97316"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      opacity={0.1}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(val) => {
+                        if (val >= 1000000000)
+                          return `${(val / 1000000000).toFixed(1)}M`;
+                        if (val >= 1000000)
+                          return `${(val / 1000000).toFixed(0)}jt`;
+                        if (val >= 1000) return `${(val / 1000).toFixed(0)}rb`;
+                        return val;
+                      }}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        borderColor: "hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value) => [
+                        new Intl.NumberFormat("id-ID", {
+                          style: "currency",
+                          currency: "IDR",
+                        }).format(value),
+                        "Total Penjualan",
+                      ]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      stroke="#f97316"
+                      fill="url(#colorSales)"
+                      strokeWidth={3}
+                    />
+                  </AreaChart>
+                )}
 
-        {/* Monthly Orders */}
-        <Card className="flex flex-col glass-card-strong rounded-2xl">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-bold">
-              Pesanan Bulanan {currentYear}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Total pesanan per bulan
-            </p>
-          </CardHeader>
-          <CardContent className="flex-1 min-h-0 relative">
-            <FeatureNotReady blur={true} overlay={true} message="Segera Hadir">
-              {/* Empty Chart for Visual Placeholder */}
-              <div className="w-full h-full"></div>
-            </FeatureNotReady>
-          </CardContent>
-        </Card>
+                {activeTab === "orders" && (
+                  <BarChart
+                    data={ordersDailyData}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      opacity={0.1}
+                    />
+                    <XAxis
+                      dataKey="displayDate"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "transparent" }}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        borderColor: "hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <ReferenceLine
+                      y={avgDailyOrders}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="3 3"
+                      label={{
+                        position: "right",
+                        value: `Rata-rata: ${avgDailyOrders}`,
+                        fill: "hsl(var(--muted-foreground))",
+                        fontSize: 10,
+                      }}
+                    />
+                    <Bar
+                      dataKey="total"
+                      name="Total Pesanan"
+                      radius={[4, 4, 0, 0]}
+                    >
+                      {ordersDailyData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.total > avgDailyOrders ? "#3b82f6" : "#94a3b8"
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
+
+                {activeTab === "yoy" && (
+                  <div className="h-full w-full flex items-center justify-center">
+                    <FeatureNotReady message="Analisis YoY Segera Hadir" />
+                  </div>
+                )}
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 };
 
-// Sub-component for Sales Trend Chart to keep main component clean
-const SalesTrendChart = ({ storeId, stores }) => {
-  const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const currentYear = new Date().getFullYear();
-  const lastYear = currentYear - 1;
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Prepare buckets for 12 months
-        const monthlyData = Array.from({ length: 12 }, (_, i) => ({
-          name: new Date(0, i).toLocaleString("id-ID", { month: "short" }),
-          [currentYear]: 0,
-          [lastYear]: 0,
-        }));
-
-        const fetchYearlyData = async (id, year) => {
-          const params = {
-            store_id: id,
-            date_from: `${year}-01-01`,
-            date_to: `${year}-12-31`,
-          };
-          try {
-            const res = await api.dashboard.trenPenjualan(params);
-            return res.data?.data || [];
-          } catch (e) {
-            console.error("Error fetching trend:", e);
-            return [];
-          }
-        };
-
-        let shopsToFetch = [];
-        if (storeId === "all") {
-          shopsToFetch = stores
-            .filter((s) => s.IsActive !== false)
-            .map((s) => s.ID || s.id);
-        } else {
-          shopsToFetch = [storeId];
-        }
-
-        // Fetch Current Year and Last Year in parallel
-        const fetchAllForYear = async (year) => {
-          const promises = shopsToFetch.map((id) => fetchYearlyData(id, year));
-          const results = await Promise.all(promises);
-
-          // Aggregate results
-          const yearTotals = new Array(12).fill(0);
-          results.forEach((storeData) => {
-            storeData.forEach((item, index) => {
-              if (index < 12) yearTotals[index] += Number(item.total || 0);
-            });
-          });
-          return yearTotals;
-        };
-
-        const [currentYearTotals, lastYearTotals] = await Promise.all([
-          fetchAllForYear(currentYear),
-          fetchAllForYear(lastYear),
-        ]);
-
-        // Update chart data
-        const finalData = monthlyData.map((item, index) => ({
-          ...item,
-          [currentYear]: currentYearTotals[index],
-          [lastYear]: lastYearTotals[index],
-        }));
-
-        setChartData(finalData);
-      } catch (err) {
-        console.error("Failed loading trend chart", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (storeId) {
-      fetchData();
-    }
-  }, [storeId, stores]);
-
-  const formatCurrencyShort = (value) => {
-    if (value >= 1000000000) return `Rp${(value / 1000000000).toFixed(1)}M`;
-    if (value >= 1000000) return `Rp${(value / 1000000).toFixed(1)}jt`;
-    if (value >= 1000) return `Rp${(value / 1000).toFixed(0)}rb`;
-    return `Rp${value}`;
+// Premium MetricCard Component (Reused)
+const MetricCard = ({ metric }) => {
+  const colorThemes = {
+    blue: {
+      iconBg: "bg-gradient-to-br from-blue-500 to-indigo-500",
+      iconText: "text-white",
+      accent: "#3b82f6",
+      accentClass: "from-blue-500 to-blue-500/80",
+    },
+    emerald: {
+      iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
+      iconText: "text-white",
+      accent: "#10b981",
+      accentClass: "from-emerald-500 to-emerald-500/80",
+    },
+    purple: {
+      iconBg: "bg-gradient-to-br from-purple-500 to-violet-500",
+      iconText: "text-white",
+      accent: "#a855f7",
+      accentClass: "from-purple-500 to-purple-500/80",
+    },
+    orange: {
+      iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
+      iconText: "text-white",
+      accent: "#f97316",
+      accentClass: "from-orange-500 to-orange-500/80",
+    },
+    cyan: {
+      iconBg: "bg-gradient-to-br from-cyan-500 to-sky-500",
+      iconText: "text-white",
+      accent: "#06b6d4",
+      accentClass: "from-cyan-500 to-cyan-500/80",
+    },
+    green: {
+      iconBg: "bg-gradient-to-br from-green-500 to-emerald-600",
+      iconText: "text-white",
+      accent: "#22c55e",
+      accentClass: "from-green-500 to-green-500/80",
+    },
+    pink: {
+      iconBg: "bg-gradient-to-br from-pink-500 to-rose-500",
+      iconText: "text-white",
+      accent: "#ec4899",
+      accentClass: "from-pink-500 to-pink-500/80",
+    },
   };
+  const theme = colorThemes[metric.color] || colorThemes.blue;
+
+  const highlightThemes = {
+    blue: "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 shadow-blue-500/40",
+    orange:
+      "bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 shadow-orange-500/40",
+    purple:
+      "bg-gradient-to-br from-purple-600 via-purple-700 to-fuchsia-800 shadow-purple-500/40",
+  };
+  const highlightClass = metric.highlight
+    ? `${
+        highlightThemes[metric.color] || highlightThemes.blue
+      } text-white border-transparent shadow-2xl ring-1 ring-white/20`
+    : "glass-card hover:shadow-2xl";
 
   return (
-    <Card className="lg:col-span-2 flex flex-col glass-card-strong rounded-2xl">
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-base font-bold">Tren Penjualan</CardTitle>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Perbandingan {currentYear} vs {lastYear}
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-            <span className="opacity-70">{currentYear}</span>
+    <div className="h-full">
+      <FeatureNotReady
+        blur={metric.isDummy}
+        overlay={metric.isDummy}
+        message="Segera Hadir"
+      >
+        <Card
+          className={`relative overflow-hidden h-full transition-all duration-300 hover:scale-[1.02] rounded-2xl ${highlightClass}`}
+        >
+          {!metric.highlight && (
+            <div
+              className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-gradient-to-b ${theme.accentClass}`}
+            />
+          )}
+
+          <div
+            className={`absolute -bottom-3 -right-3 opacity-[0.08] rotate-12 pointer-events-none`}
+          >
+            <metric.icon size={64} />
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-            <span className="opacity-70">{lastYear}</span>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-[300px] relative">
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+
+          <div className="relative z-10 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className={`p-2.5 rounded-xl shadow-lg ${
+                  metric.highlight
+                    ? "bg-white/20 text-white shadow-white/10"
+                    : `${theme.iconBg} ${theme.iconText} shadow-${metric.color}-500/30`
+                }`}
+              >
+                <metric.icon size={18} strokeWidth={2.5} />
+              </div>
+              <h3
+                className={`text-xs font-semibold leading-tight ${
+                  metric.highlight ? "text-white/90" : "text-muted-foreground"
+                }`}
+              >
+                {metric.title}
+              </h3>
+            </div>
+
+            <p
+              className={`text-2xl font-extrabold tracking-tight mb-2 ${
+                metric.highlight ? "text-white" : "text-foreground"
+              }`}
             >
-              <defs>
-                <linearGradient id="colorCurrent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorLast" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="hsl(var(--border))"
-                opacity={0.5}
-              />
-              <XAxis
-                dataKey="name"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                dy={10}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={formatCurrencyShort}
-                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  borderColor: "hsl(var(--border))",
-                  borderRadius: "12px",
-                  color: "hsl(var(--foreground))",
-                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                }}
-                formatter={(value) =>
-                  new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                  }).format(value)
+              <CountUp
+                start={0}
+                end={metric.value}
+                duration={2.0}
+                separator="."
+                decimal=","
+                decimals={
+                  metric.format === "currency"
+                    ? 0
+                    : metric.format === "number" && metric.value % 1 !== 0
+                    ? 2
+                    : 0
                 }
+                prefix={metric.format === "currency" ? "Rp" : ""}
+                suffix={metric.format === "percent" ? "%" : metric.suffix || ""}
               />
-              <Area
-                type="monotone"
-                dataKey={currentYear}
-                stroke="#f97316"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorCurrent)"
-                activeDot={{ r: 6, strokeWidth: 0, fill: "#f97316" }}
-              />
-              <Area
-                type="monotone"
-                dataKey={lastYear}
-                stroke="#9ca3af"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                fillOpacity={1}
-                fill="url(#colorLast)"
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </CardContent>
-    </Card>
+            </p>
+
+            <div className="flex items-center justify-between">
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
+                  metric.highlight
+                    ? "bg-white/20 text-white"
+                    : metric.trendUp
+                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                    : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                {metric.trendUp ? "↑" : "↓"} {metric.trend}
+              </span>
+
+              <div className="w-16 h-8">
+                {/* Sparkline restored */}
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={metric.data.map((v, i) => ({ i, v }))}>
+                    <defs>
+                      <linearGradient
+                        id={`grad-${metric.color}`}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor={
+                            metric.highlight ? "#ffffff" : theme.accent
+                          }
+                          stopOpacity={0.5}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor={
+                            metric.highlight ? "#ffffff" : theme.accent
+                          }
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="v"
+                      stroke={metric.highlight ? "#ffffff" : theme.accent}
+                      fill={`url(#grad-${metric.color})`}
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </FeatureNotReady>
+    </div>
   );
 };
 

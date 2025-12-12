@@ -17,4 +17,13 @@ export const AdsService = {
 
   impressions: (params) =>
     apiClient.post("/admin/dashboard-iklan/dilihat", params),
+
+  salesVsCost: (params) =>
+    apiClient.post("/admin/dashboard-iklan/penjualan-dan-biaya", params),
+
+  totalRoas: (params) =>
+    apiClient.post("/admin/dashboard-iklan/total-roas", params),
+
+  topProducts: (params) =>
+    apiClient.post("/admin/dashboard-iklan/top-product", params),
 };

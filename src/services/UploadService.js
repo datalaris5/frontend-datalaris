@@ -11,6 +11,8 @@ export const UploadService = {
       endpoint = `/admin/upload/tinjauan/${storeId}`;
     } else if (type === "ads") {
       endpoint = `/admin/upload/iklan/${storeId}`;
+    } else if (type === "chat") {
+      endpoint = `/admin/upload/chat/${storeId}`;
     } else {
       return Promise.reject(
         new Error("Tipe data ini belum didukung untuk upload.")

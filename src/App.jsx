@@ -34,6 +34,8 @@ const DashboardProducts = React.lazy(() =>
   import("./pages/Dashboard/Products")
 );
 const DynamicDashboard = React.lazy(() => import("./pages/Dashboard/Dynamic"));
+const DashboardAds = React.lazy(() => import("./pages/Dashboard/Ads"));
+const DashboardChat = React.lazy(() => import("./pages/Dashboard/Chat"));
 
 // Store & Data
 const StoreManagement = React.lazy(() => import("./pages/Store/Management"));
@@ -111,6 +113,8 @@ function App() {
                       path="dashboard-custom"
                       element={<DynamicDashboard />}
                     />
+                    <Route path="ads" element={<DashboardAds />} />
+                    <Route path="chat" element={<DashboardChat />} />
                     <Route path="stores" element={<StoreManagement />} />
                     <Route path="upload" element={<DataUpload />} />
                     <Route path="pricing" element={<SubscriptionPlans />} />

@@ -6,6 +6,8 @@ import { UploadService } from "./UploadService";
 import { DashboardService } from "./DashboardService";
 import { AdsService } from "./AdsService";
 
+import { ChatService } from "./ChatService";
+
 export const api = {
   auth: AuthService,
   stores: StoreService,
@@ -14,6 +16,7 @@ export const api = {
   upload: UploadService,
   dashboard: DashboardService,
   ads: AdsService,
+  chat: ChatService,
   admin: {
     // Existing admin placeholders
     users: {
