@@ -18,11 +18,31 @@ Dokumen ini berisi daftar kendala teknis (bugs) dan permintaan fitur untuk Tim B
 - **Komponen**: Authentikasi / `auth_controller.go`
 - **Masalah**: Belum ada endpoint publik `/register`. Hanya ada `/login`.
 - **Efek**: User baru tidak bisa mendaftar. Tombol register di frontend saat ini dinonaktifkan.
-- **Action Item**: Buat endpoint `POST /register` (Payload: Name, Email, Password).
+
+### 1.3. [Feature Request] Dynamic Sort Top Produk
+
+- **Komponen**: Dashboard Iklan / `dashboard_iklan_controller.go`
+- **Kebutuhan**: User ingin bisa mengurutkan (Sort) tabel Top Produk berdasarkan header kolom (Biaya, Penjualan, ROAS).
+- **Masalah**: Saat ini endpoint hardcode `LIMIT 10` acak. Frontend tidak bisa sorting akurat jika data dari DB cuma 10 sampel random.
+- **Action Item**: Tambahkan parameter `sort_by` (enum: `cost`, `sales`, `roas`) dan `order` (`asc`, `desc`) pada endpoint `top-product`.
+
+### 1.4. [Missing] API Upload Data Pesanan
+
+- **Komponen**: Upload Data / `file_controller.go`
+- **Masalah**: Frontend memiliki menu "Shopee Pesanan" (Orders), tapi Endpoint backend `/upload/orders` belum ada.
+- **Efek**: User tidak bisa upload data detail pesanan, hanya Tinjauan, Iklan, dan Chat.
+- **Action Item**: Buat endpoint `POST /admin/upload/orders/:id` dan logic parsing Excel pesanan.
 
 ---
 
 ## 🟨 PRIORITAS 2: HIGH (Dibutuhkan Segera)
+
+### 2.3. [Missing] API CPA & AOV Iklan
+
+- **Komponen**: Dashboard Iklan
+- **Kebutuhan**: User ingin melihat metrik **CPA (Cost Per Acquisition)** dan **AOV (Average Order Value)** khusus dari iklan.
+- **Masalah**: Belum ada endpoint untuk ini, dan frontend tidak punya data mentah `Total Conversions` untuk menghitungnya sendiri.
+- **Action Item**: Buat endpoint `/cpa` dan `/aov-iklan` atau return field `total_conversions` di endpoint yang ada.
 
 ### 2.1. [Missing] API Total Pembeli Baru
 
@@ -37,6 +57,13 @@ Dokumen ini berisi daftar kendala teknis (bugs) dan permintaan fitur untuk Tim B
 - **Masalah**: Belum ada endpoint khusus untuk tren pesanan bulanan 2024 vs 2025.
 - **Workaround Saat Ini**: Frontend mengambil data harian (`total-pesanan`) range 1 tahun, lalu menghitung total per bulan secara manual.
 - **Action Item**: Buat endpoint `POST /admin/dashboard-tinjauan/tren-pesanan` yang me-return data grouped by month untuk performa lebih baik.
+
+### 2.4. [Missing] API Average Response Time
+
+- **Komponen**: Dashboard Chat / `dashboard_chat_controller.go`
+- **Masalah**: Kolom `waktu_respon_rata_rata` SUDAH ADA di tabel `shopee_data_upload_chat_details`, tapi belum ada endpoint backend untuk mengambil datanya.
+- **Action Item**: Buat method `GetDashboardChatWaktuRespon` yang meng-query kolom `waktu_respon_rata_rata`.
+- **Note**: Frontend saat ini menggunakan dummy endpoint (404) dan menampilkan placeholder "Segera Hadir".
 
 ---
 

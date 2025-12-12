@@ -12,6 +12,8 @@ import {
   ShoppingBag,
   Package,
   ChevronDown,
+  Megaphone,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -40,6 +42,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Tinjauan", path: "/overview" },
+    { icon: Megaphone, label: "Iklan", path: "/ads" },
+    { icon: MessageSquare, label: "Chat", path: "/chat" },
     {
       icon: ShoppingBag,
       label: "Pesanan Toko",
