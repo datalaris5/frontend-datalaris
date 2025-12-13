@@ -23,21 +23,33 @@ import {
   Upload,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useFilter } from "../../../context/FilterContext";
 import { api } from "../../../services/api";
 import FeatureNotReady from "../../../components/common/FeatureNotReady";
 import {
   format,
   parseISO,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
+  startOfYear,
+  endOfYear,
+  eachMonthOfInterval,
+  getYear,
 } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import CountUp from "react-countup";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
+import ChartTooltip from "../../../components/common/ChartTooltip";
+import {
+  calculateMoMGrowth,
+  calculateBasketSize,
+  aggregateByQuarter,
+  aggregateByDayOfWeek,
+} from "../../../utils/chartUtils";
+import {
+  chartColors,
+  chartUI,
+  chartGradients,
+} from "../../../config/chartTheme";
 
 const DashboardOverview = () => {
   const { store, stores, dateRange } = useFilter();
@@ -48,9 +60,11 @@ const DashboardOverview = () => {
   const [activeTab, setActiveTab] = useState("sales");
 
   // Data States
-  const [salesMonthlyData, setSalesMonthlyData] = useState([]);
-  const [ordersDailyData, setOrdersDailyData] = useState([]);
-  const [avgDailyOrders, setAvgDailyOrders] = useState(0);
+  const [salesData, setSalesData] = useState([]); // Sales Chart Data (Month or Qtr)
+  const [salesViewMode, setSalesViewMode] = useState("monthly"); // "monthly" | "quarterly"
+  const [ordersDayData, setOrdersDayData] = useState([]); // Orders Chart Data (Min-Sab)
+  const [rawMonthlyData, setRawMonthlyData] = useState([]); // Store raw monthly aggregation
+  const [avgMonthlyOrders, setAvgMonthlyOrders] = useState(0);
 
   // Metrics State
   const [metrics, setMetrics] = useState([
@@ -112,23 +126,22 @@ const DashboardOverview = () => {
     },
     {
       title: "Produk Terjual",
-      value: 0, // Placeholder
+      value: 0,
       format: "number",
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
       icon: Package,
-      isDummy: true, // Mark as dummy
+      isDummy: true, // Still dummy as per plan
       color: "pink",
     },
   ]);
 
-  // Helper to merge sparklines
+  // Helper to merge sparklines (for Multi-Store selection)
   const mergeSparklines = (base, incoming) => {
     if (!incoming || incoming.length === 0) return base;
     if (!base || base.length === 0) return incoming.map((i) => ({ ...i }));
 
-    // Create a map for faster lookup
     const incomingMap = new Map(incoming.map((i) => [i.tanggal, i]));
 
     return base.map((b) => {
@@ -137,56 +150,19 @@ const DashboardOverview = () => {
     });
   };
 
+  // 1. Fetch METRICS Data (Follows Filter)
   useEffect(() => {
-    const fetchStoreDetails = async (id) => {
-      const fromDate = dateRange?.startDate
-        ? format(dateRange.startDate, "yyyy-MM-dd")
-        : "";
-      const toDate = dateRange?.endDate
-        ? format(dateRange.endDate, "yyyy-MM-dd")
-        : "";
-
-      const payload = {
-        store_id: id,
-        date_from: fromDate,
-        date_to: toDate,
-      };
-
-      const [salesRes, ordersRes, visitorsRes, crRes, bsRes] =
-        await Promise.all([
-          api.dashboard.totalPenjualan(payload),
-          api.dashboard.totalPesanan(payload),
-          api.dashboard.totalPengunjung(payload),
-          api.dashboard.conversionRate(payload),
-          api.dashboard.basketSize(payload),
-        ]);
-
-      const extract = (res) => {
-        const data = res.data?.data || {};
-        const current = Number(data.total || 0);
-        const percent = Number(data.percent || 0);
-        const sparkline = data.sparkline || [];
-        return { current, percent, sparkline };
-      };
-
-      return {
-        sales: extract(salesRes),
-        orders: extract(ordersRes),
-        visitors: extract(visitorsRes),
-        cr: extract(crRes),
-        bs: extract(bsRes),
-      };
-    };
-
-    const loadData = async () => {
+    const loadMetrics = async () => {
       setLoading(true);
       try {
-        let aggSales = { current: 0, percent: 0, sparkline: [] };
-        let aggOrders = { current: 0, percent: 0, sparkline: [] };
-        let aggVisitors = { current: 0, percent: 0, sparkline: [] };
-        let aggCR = { current: 0, percent: 0, sparkline: [] };
-        let aggBS = { current: 0, percent: 0, sparkline: [] };
+        const fromDate = dateRange?.startDate
+          ? format(dateRange.startDate, "yyyy-MM-dd")
+          : "";
+        const toDate = dateRange?.endDate
+          ? format(dateRange.endDate, "yyyy-MM-dd")
+          : "";
 
+        // Determine target stores
         let targetStores = [];
         if (store === "all") {
           targetStores = stores.filter((s) => s && s.id);
@@ -199,173 +175,352 @@ const DashboardOverview = () => {
           return;
         }
 
-        const results = await Promise.all(
-          targetStores.map((s) => fetchStoreDetails(s.id))
-        );
-
-        results.forEach((res, idx) => {
-          aggSales.current += res.sales.current;
-          aggOrders.current += res.orders.current;
-          aggVisitors.current += res.visitors.current;
-
-          if (idx === 0) {
-            aggSales.sparkline = res.sales.sparkline || [];
-            aggOrders.sparkline = res.orders.sparkline || [];
-            aggVisitors.sparkline = res.visitors.sparkline || [];
-          } else {
-            aggSales.sparkline = mergeSparklines(
-              aggSales.sparkline,
-              res.sales.sparkline
-            );
-            aggOrders.sparkline = mergeSparklines(
-              aggOrders.sparkline,
-              res.orders.sparkline
-            );
-            aggVisitors.sparkline = mergeSparklines(
-              aggVisitors.sparkline,
-              res.visitors.sparkline
-            );
-          }
-        });
-
-        // Recalculate Derived Metrics
-        aggBS.current =
-          aggOrders.current > 0 ? aggSales.current / aggOrders.current : 0;
-        aggCR.current =
-          aggVisitors.current > 0
-            ? (aggOrders.current / aggVisitors.current) * 100
-            : 0;
-
-        // Recalculate Sparklines for Derived Metrics
-        if (aggSales.sparkline.length > 0 && aggOrders.sparkline.length > 0) {
-          // Ensure lengths match or handle mismatch
-          aggBS.sparkline = aggSales.sparkline.map((s, i) => {
-            const o = aggOrders.sparkline.find(
-              (x) => x.tanggal === s.tanggal
-            ) || { total: 0 };
-            return {
-              tanggal: s.tanggal,
-              total:
-                Number(o.total) > 0 ? Number(s.total) / Number(o.total) : 0,
-            };
-          });
-        }
-
-        if (
-          aggOrders.sparkline.length > 0 &&
-          aggVisitors.sparkline.length > 0
-        ) {
-          aggCR.sparkline = aggVisitors.sparkline.map((v, i) => {
-            const o = aggOrders.sparkline.find(
-              (x) => x.tanggal === v.tanggal
-            ) || { total: 0 };
-            return {
-              tanggal: v.tanggal,
-              total:
-                Number(v.total) > 0
-                  ? (Number(o.total) / Number(v.total)) * 100
-                  : 0,
-            };
-          });
-        }
-
-        // Dummy Growth Data (Since we don't have prev period in this context yet)
-        const growth = { sales: 0, orders: 0, cr: 0, bs: 0, visitors: 0 };
-
-        // Update Metrics UI
-        setMetrics((prev) => {
-          const newMetrics = [...prev];
-          const update = (idx, dataObj, fmt, trend) => {
-            const sparkline = dataObj.sparkline || [];
-            newMetrics[idx] = {
-              ...newMetrics[idx],
-              value: dataObj.current,
-              format: fmt,
-              trend: `${trend.toFixed(1)}%`,
-              trendUp: trend >= 0,
-              data:
-                sparkline.length > 0
-                  ? sparkline.map((d) => Number(d.total))
-                  : [0, 0, 0, 0, 0, 0, 0],
-              isDummy: false,
-            };
+        // Fetch function for single store
+        const fetchStoreMetrics = async (id) => {
+          const payload = {
+            store_id: id,
+            date_from: fromDate,
+            date_to: toDate,
           };
+          const [salesRes, ordersRes, visitorsRes, crRes, bsRes] =
+            await Promise.all([
+              api.dashboard.totalPenjualan(payload),
+              api.dashboard.totalPesanan(payload),
+              api.dashboard.totalPengunjung(payload),
+              api.dashboard.conversionRate(payload),
+              api.dashboard.basketSize(payload),
+            ]);
 
-          update(0, aggSales, "currency", growth.sales);
-          update(1, aggOrders, "number", growth.orders);
-          update(2, aggCR, "percent", growth.cr);
-          update(3, aggBS, "currency", growth.bs);
-          update(4, aggVisitors, "number", growth.visitors);
-
-          return newMetrics;
-        });
-
-        // --- Process Chart Data ---
-
-        // 1. Process Order Data (Daily)
-        if (aggOrders.sparkline && aggOrders.sparkline.length > 0) {
-          const dailyOrders = aggOrders.sparkline
-            .map((d) => ({
-              date: d.tanggal,
-              displayDate: format(parseISO(d.tanggal), "dd MMM"),
-              total: Number(d.total),
-            }))
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-          setOrdersDailyData(dailyOrders);
-
-          // Calculate Average
-          const totalOrders = dailyOrders.reduce(
-            (sum, item) => sum + item.total,
-            0
-          );
-          setAvgDailyOrders(
-            dailyOrders.length > 0
-              ? Math.round(totalOrders / dailyOrders.length)
-              : 0
-          );
-        } else {
-          setOrdersDailyData([]);
-          setAvgDailyOrders(0);
-        }
-
-        // 2. Process Sales Data (Monthly Aggregation)
-        if (aggSales.sparkline && aggSales.sparkline.length > 0) {
-          const monthlyMap = new Map();
-
-          aggSales.sparkline.forEach((d) => {
-            // Ensure date is valid
-            if (!d.tanggal) return;
-            const date = parseISO(d.tanggal);
-            const monthKey = format(date, "MMM yyyy", { locale: idLocale }); // e.g., "Jan 2024"
-
-            const currentTotal = monthlyMap.get(monthKey) || 0;
-            monthlyMap.set(monthKey, currentTotal + Number(d.total));
+          const extract = (res) => ({
+            current: Number(res.data?.data?.total || 0),
+            percent: Number(res.data?.data?.percent || 0),
+            trend: res.data?.data?.trend || "Equal",
+            sparkline: res.data?.data?.sparkline || [],
           });
 
-          // Convert Map to Array
-          const monthlyData = Array.from(monthlyMap.entries()).map(
-            ([month, total]) => ({
-              month,
-              total,
-            })
-          ); // Map order depends on insertion, ideally should sort if data spans years
+          return {
+            sales: extract(salesRes),
+            orders: extract(ordersRes),
+            visitors: extract(visitorsRes),
+            cr: extract(crRes),
+            bs: extract(bsRes),
+          };
+        };
 
-          setSalesMonthlyData(monthlyData);
+        // If Single Store, we leverage backend Trend %
+        if (store !== "all" && targetStores.length === 1) {
+          const res = await fetchStoreMetrics(targetStores[0].id);
+
+          setMetrics((prev) => {
+            const newMetrics = [...prev];
+            const update = (idx, dataObj, fmt, isDummy = false) => {
+              newMetrics[idx] = {
+                ...newMetrics[idx],
+                value: dataObj.current,
+                format: fmt,
+                trend: isDummy ? "0%" : `${dataObj.percent.toFixed(1)}%`,
+                trendUp: dataObj.percent >= 0,
+                // Simplify sparkline to array of numbers for the card
+                data:
+                  dataObj.sparkline.length > 0
+                    ? dataObj.sparkline.map((d) => Number(d.total))
+                    : [0, 0, 0, 0, 0, 0, 0],
+                isDummy: isDummy,
+              };
+            };
+
+            update(0, res.sales, "currency");
+            update(1, res.orders, "number");
+            update(2, res.cr, "percent");
+            update(3, res.bs, "currency");
+            update(4, res.visitors, "number");
+            // Index 5 (Produk Terjual) is skipped/kept as dummy
+            return newMetrics;
+          });
         } else {
-          setSalesMonthlyData([]);
+          // If Multi Store, we must aggregate manually.
+          // LIMITATION: We cannot calculate weighted trend % without previous period data.
+          // So trend % will be 0 for 'all'.
+
+          const results = await Promise.all(
+            targetStores.map((s) => fetchStoreMetrics(s.id))
+          );
+
+          let aggSales = { current: 0, percent: 0, sparkline: [] };
+          let aggOrders = { current: 0, percent: 0, sparkline: [] };
+          let aggVisitors = { current: 0, percent: 0, sparkline: [] };
+          // CR and BS are derived
+          let aggCR = { current: 0, percent: 0, sparkline: [] };
+          let aggBS = { current: 0, percent: 0, sparkline: [] };
+
+          results.forEach((res, idx) => {
+            aggSales.current += res.sales.current;
+            aggOrders.current += res.orders.current;
+            aggVisitors.current += res.visitors.current;
+
+            if (idx === 0) {
+              aggSales.sparkline = res.sales.sparkline;
+              aggOrders.sparkline = res.orders.sparkline;
+              aggVisitors.sparkline = res.visitors.sparkline;
+            } else {
+              aggSales.sparkline = mergeSparklines(
+                aggSales.sparkline,
+                res.sales.sparkline
+              );
+              aggOrders.sparkline = mergeSparklines(
+                aggOrders.sparkline,
+                res.orders.sparkline
+              );
+              aggVisitors.sparkline = mergeSparklines(
+                aggVisitors.sparkline,
+                res.visitors.sparkline
+              );
+            }
+          });
+
+          // Derive BS
+          aggBS.current =
+            aggOrders.current > 0 ? aggSales.current / aggOrders.current : 0;
+          // Derive CR
+          aggCR.current =
+            aggVisitors.current > 0
+              ? (aggOrders.current / aggVisitors.current) * 100
+              : 0;
+
+          setMetrics((prev) => {
+            const newMetrics = [...prev];
+            const update = (idx, dataObj, fmt) => {
+              newMetrics[idx] = {
+                ...newMetrics[idx],
+                value: dataObj.current,
+                format: fmt,
+                trend: "0%", // Hardcoded for aggregate
+                trendUp: true,
+                data:
+                  dataObj.sparkline.length > 0
+                    ? dataObj.sparkline.map((d) => Number(d.total))
+                    : [0, 0, 0, 0, 0, 0, 0],
+                isDummy: false,
+              };
+            };
+
+            update(0, aggSales, "currency");
+            update(1, aggOrders, "number");
+            update(2, aggCR, "percent");
+            update(3, aggBS, "currency");
+            update(4, aggVisitors, "number");
+            return newMetrics;
+          });
         }
       } catch (error) {
-        console.error("Overview Fetch Error:", error);
+        console.error("Overview Metrics Fetch Error:", error);
       } finally {
         setLoading(false);
       }
     };
 
     if (dateRange?.startDate) {
-      loadData();
+      loadMetrics();
     }
   }, [store, stores, dateRange]);
+
+  // 2. Fetch CHART Data (Fixed 1 Jan - 31 Dec of Selected Year)
+  useEffect(() => {
+    const loadChartData = async () => {
+      // Determine Year from dateRange (default to current year if undefined)
+      const targetDate = dateRange?.endDate || new Date();
+      // const year = getYear(targetDate); // Unused for now
+      const startOfYearDate = format(startOfYear(targetDate), "yyyy-MM-dd");
+      const endOfYearDate = format(endOfYear(targetDate), "yyyy-MM-dd");
+
+      // Generate 12-Month Skeleton (Jan-Des in Indonesian)
+      const monthsSkeleton = eachMonthOfInterval({
+        start: startOfYear(targetDate),
+        end: endOfYear(targetDate),
+      }).map((date) => ({
+        originalDate: date,
+        monthKey: format(date, "MMM yyyy", { locale: idLocale }), // e.g., "Jan 2024"
+        displayMonth: format(date, "MMM", { locale: idLocale }), // "Jan", "Feb"
+        sales: 0,
+        orders: 0,
+        basketSize: 0,
+        _basketSizeSum: 0, // Helper for averaging
+        _basketSizeCount: 0, // Helper for averaging
+      }));
+
+      // Determine target stores
+      let targetStores = [];
+      if (store === "all") {
+        targetStores = stores.filter((s) => s && s.id);
+      } else {
+        targetStores = [{ id: store }];
+      }
+
+      if (targetStores.length === 0) return;
+
+      const fetchStoreChart = async (id) => {
+        const payload = {
+          store_id: id,
+          date_from: startOfYearDate,
+          date_to: endOfYearDate,
+        };
+        const [salesRes, ordersRes] = await Promise.all([
+          api.dashboard.totalPenjualan(payload),
+          api.dashboard.totalPesanan(payload),
+        ]);
+
+        return {
+          sales: salesRes.data?.data?.sparkline || [],
+          orders: ordersRes.data?.data?.sparkline || [],
+        };
+      };
+
+      try {
+        const results = await Promise.all(
+          targetStores.map((s) => fetchStoreChart(s.id))
+        );
+
+        // Aggregate results into the Skeleton
+        results.forEach((res) => {
+          // Process Sales
+          res.sales.forEach((item) => {
+            const date = parseISO(item.tanggal);
+            const monthKey = format(date, "MMM yyyy", { locale: idLocale });
+            const monthIndex = monthsSkeleton.findIndex(
+              (m) => m.monthKey === monthKey
+            );
+            if (monthIndex !== -1) {
+              monthsSkeleton[monthIndex].sales += Number(item.total);
+            }
+          });
+
+          // Process Orders
+          res.orders.forEach((item) => {
+            const date = parseISO(item.tanggal);
+            const monthKey = format(date, "MMM yyyy", { locale: idLocale });
+            const monthIndex = monthsSkeleton.findIndex(
+              (m) => m.monthKey === monthKey
+            );
+            if (monthIndex !== -1) {
+              monthsSkeleton[monthIndex].orders += Number(item.total);
+            }
+          });
+        });
+
+        // Finalize Basket Size & Calculate Growth
+        // 1. Calculate Basket Size
+        const processedSkeleton = monthsSkeleton.map((m) => ({
+          ...m,
+          basketSize: calculateBasketSize(m.sales, m.orders),
+        }));
+
+        // 2. Calculate Growth for relevant metrics
+        const finalData = calculateMoMGrowth(processedSkeleton, [
+          "sales",
+          "orders",
+          "basketSize",
+        ]);
+
+        // Store raw monthly data for toggle
+        setRawMonthlyData(finalData);
+        setSalesData(finalData); // Default: Monthly view
+
+        // Aggregate Orders by Day of Week
+        // Collect all daily orders from all stores
+        let allDailyOrders = [];
+        results.forEach((res) => {
+          if (res.orders && res.orders.length > 0) {
+            allDailyOrders = [...allDailyOrders, ...res.orders];
+          }
+        });
+        const dayOfWeekData = aggregateByDayOfWeek(allDailyOrders);
+        setOrdersDayData(dayOfWeekData);
+
+        // Calculate Avg Orders (Monthly Average)
+        const totalOrders = finalData.reduce(
+          (acc, curr) => acc + curr.orders,
+          0
+        );
+        setAvgMonthlyOrders(Math.round(totalOrders / 12));
+      } catch (error) {
+        console.error("Chart Data Fetch Error:", error);
+      }
+    };
+
+    if (stores.length > 0) {
+      loadChartData();
+    }
+  }, [store, stores, dateRange?.endDate]);
+
+  // 3. Fetch OPERATIONAL Chart Data (Follows Filter - for Day of Week Analysis)
+  useEffect(() => {
+    const loadOperationalData = async () => {
+      // Use filter dates (not full year)
+      const fromDate = dateRange?.startDate
+        ? format(dateRange.startDate, "yyyy-MM-dd")
+        : "";
+      const toDate = dateRange?.endDate
+        ? format(dateRange.endDate, "yyyy-MM-dd")
+        : "";
+
+      if (!fromDate || !toDate) return;
+
+      // Determine target stores
+      let targetStores = [];
+      if (store === "all") {
+        targetStores = stores.filter((s) => s && s.id);
+      } else {
+        targetStores = [{ id: store }];
+      }
+
+      if (targetStores.length === 0) return;
+
+      try {
+        // Fetch Orders data for all stores
+        const results = await Promise.all(
+          targetStores.map(async (s) => {
+            const payload = {
+              store_id: s.id,
+              date_from: fromDate,
+              date_to: toDate,
+            };
+            const ordersRes = await api.dashboard.totalPesanan(payload);
+            return ordersRes.data?.data?.sparkline || [];
+          })
+        );
+
+        // Collect all daily orders
+        let allDailyOrders = [];
+        results.forEach((sparkline) => {
+          if (sparkline && sparkline.length > 0) {
+            allDailyOrders = [...allDailyOrders, ...sparkline];
+          }
+        });
+
+        // Aggregate by Day of Week (now uses AVERAGE)
+        const dayOfWeekData = aggregateByDayOfWeek(allDailyOrders);
+        setOrdersDayData(dayOfWeekData);
+      } catch (error) {
+        console.error("Operational Chart Fetch Error:", error);
+      }
+    };
+
+    if (stores.length > 0 && dateRange?.startDate) {
+      loadOperationalData();
+    }
+  }, [store, stores, dateRange]);
+
+  // 4. Handle Sales View Mode Toggle (Monthly <-> Quarterly)
+  useEffect(() => {
+    if (rawMonthlyData.length === 0) return;
+
+    if (salesViewMode === "quarterly") {
+      const quarterlyData = aggregateByQuarter(rawMonthlyData);
+      setSalesData(quarterlyData);
+    } else {
+      setSalesData(rawMonthlyData);
+    }
+  }, [salesViewMode, rawMonthlyData]);
 
   return (
     <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in pb-4">
@@ -399,170 +554,171 @@ const DashboardOverview = () => {
       </div>
 
       {/* Content Grid */}
-      <div className="flex-1 min-h-0 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main Charts Area (Tabbed) */}
-        <div className="h-full min-h-0 w-full">
+        <div className="lg:col-span-2 h-full min-h-0">
           <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
             <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-lg font-bold">
-                  Analisis Performa
+                  Analisa Tren
                 </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  tren penjualan, jumlah order, dan pertumbuhan
+                  Tren penjualan, jumlah order, dan pertumbuhan
                 </p>
               </div>
-              <Tabs
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="w-full sm:w-[400px]"
-              >
-                <TabsList className="grid w-full grid-cols-3 bg-white/5">
-                  <TabsTrigger value="sales">Penjualan</TabsTrigger>
-                  <TabsTrigger value="orders">Pesanan</TabsTrigger>
-                  <TabsTrigger value="yoy">YoY Growth</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
+                <button
+                  onClick={() => setSalesViewMode("monthly")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    salesViewMode === "monthly"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  }`}
+                >
+                  Bulanan
+                </button>
+                <button
+                  onClick={() => setSalesViewMode("quarterly")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    salesViewMode === "quarterly"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  }`}
+                >
+                  Kuartal
+                </button>
+              </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
               <ResponsiveContainer width="100%" height="100%">
-                {activeTab === "sales" && (
-                  <AreaChart
-                    data={salesMonthlyData}
-                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorSales"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#f97316"
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#f97316"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(val) => {
-                        if (val >= 1000000000)
-                          return `${(val / 1000000000).toFixed(1)}M`;
-                        if (val >= 1000000)
-                          return `${(val / 1000000).toFixed(0)}jt`;
-                        if (val >= 1000) return `${(val / 1000).toFixed(0)}rb`;
-                        return val;
-                      }}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                      formatter={(value) => [
-                        new Intl.NumberFormat("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                        }).format(value),
-                        "Total Penjualan",
-                      ]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#f97316"
-                      fill="url(#colorSales)"
-                      strokeWidth={3}
-                    />
-                  </AreaChart>
-                )}
+                <AreaChart
+                  data={salesData}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset={chartGradients.primary.start.offset}
+                        stopColor={chartGradients.primary.start.color}
+                        stopOpacity={chartGradients.primary.start.opacity}
+                      />
+                      <stop
+                        offset={chartGradients.primary.end.offset}
+                        stopColor={chartGradients.primary.end.color}
+                        stopOpacity={chartGradients.primary.end.opacity}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    opacity={0.1}
+                  />
+                  <XAxis
+                    dataKey="displayMonth"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10 }}
+                    dy={10}
+                    interval={0}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(val) => {
+                      if (val >= 1000000000)
+                        return `${(val / 1000000000).toFixed(1)}M`;
+                      if (val >= 1000000)
+                        return `${(val / 1000000).toFixed(0)}jt`;
+                      if (val >= 1000) return `${(val / 1000).toFixed(0)}rb`;
+                      return val;
+                    }}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <Tooltip
+                    content={<ChartTooltip type="auto" />}
+                    cursor={{ stroke: chartUI.cursor.stroke }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sales"
+                    name="Total Penjualan"
+                    stroke={chartColors.primary}
+                    fill="url(#colorSales)"
+                    strokeWidth={3}
+                  />
+                  {/* Hidden Area for Tooltip Context */}
+                  <Area
+                    type="monotone"
+                    dataKey="orders"
+                    name="Total Pesanan"
+                    stroke="transparent"
+                    fill="transparent"
+                    strokeWidth={0}
+                    activeDot={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="basketSize"
+                    name="Basket Size"
+                    stroke="transparent"
+                    fill="transparent"
+                    strokeWidth={0}
+                    activeDot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
 
-                {activeTab === "orders" && (
-                  <BarChart
-                    data={ordersDailyData}
-                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="displayDate"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "transparent" }}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <ReferenceLine
-                      y={avgDailyOrders}
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="3 3"
-                      label={{
-                        position: "right",
-                        value: `Rata-rata: ${avgDailyOrders}`,
-                        fill: "hsl(var(--muted-foreground))",
-                        fontSize: 10,
-                      }}
-                    />
-                    <Bar
-                      dataKey="total"
-                      name="Total Pesanan"
-                      radius={[4, 4, 0, 0]}
-                    >
-                      {ordersDailyData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            entry.total > avgDailyOrders ? "#3b82f6" : "#94a3b8"
-                          }
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                )}
-
-                {activeTab === "yoy" && (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <FeatureNotReady message="Analisis YoY Segera Hadir" />
-                  </div>
-                )}
+        {/* Side Chart: Day Analysis (Orders) */}
+        <div className="h-full min-h-0">
+          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
+            <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
+              <CardTitle className="text-lg font-bold">
+                Analisa Operasional
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Rata-rata pesanan per hari (sesuai filter)
+              </p>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={ordersDayData}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    opacity={0.1}
+                  />
+                  <XAxis
+                    dataKey="displayMonth"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10 }}
+                    dy={10}
+                    interval={0}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <Tooltip
+                    content={<ChartTooltip type="dayOfWeek" />}
+                    cursor={{ fill: chartUI.cursor.fill }}
+                  />
+                  <Bar
+                    dataKey="orders"
+                    name="Rata-rata Pesanan"
+                    fill={chartColors.secondary}
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>

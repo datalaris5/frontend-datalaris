@@ -59,31 +59,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
-    // Backend doesn't have a public register endpoint yet.
-    // We will simulate a successful registration and login for the audit/demo to work.
+  const register = async (name, email, password, tenantName) => {
+    try {
+      // Generate unique tenant name to avoid UNIQUE constraint violation
+      // Use provided name or fallback to user name + short unique suffix
+      const uniqueTenantName =
+        tenantName || `${name}_${Date.now().toString(36)}`;
 
-    const newUser = {
-      name,
-      email,
-      role: "user", // Default role
-      subscription: "starter", // Default to starter
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        name
-      )}&background=random`,
-      id: Date.now(), // Mock ID
-    };
+      // Step 1: Register the user
+      await api.auth.register({
+        name,
+        email,
+        password,
+        tenant_name: uniqueTenantName,
+      });
 
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
+      // Step 2: Auto-login after successful registration
+      // Backend register doesn't return token, so we need to login
+      const loginResponse = await api.auth.login({ email, password });
+      const { token, user: userData } = loginResponse.data.data;
 
-    // Auto-login after register
-    const mockToken = "mock-jwt-token-for-demo";
-    localStorage.setItem("token", mockToken);
-    localStorage.setItem("datalaris_user", JSON.stringify(newUser));
-    setUser(newUser);
+      // Normalize user data
+      if (!userData.subscription) userData.subscription = "starter";
 
-    return true;
+      localStorage.setItem("token", token);
+      localStorage.setItem("datalaris_user", JSON.stringify(userData));
+      setUser(userData);
+      return true;
+    } catch (error) {
+      console.error("Registration failed:", error);
+      throw error;
+    }
   };
 
   const upgradeSubscription = (planId) => {

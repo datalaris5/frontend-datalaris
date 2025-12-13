@@ -137,6 +137,61 @@
     @apply shadow-lg;
   }
 
+  /* Glass Tooltip - Centralized for Chart Tooltips */
+  .glass-tooltip {
+    @apply bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl;
+    @apply border border-black/5 dark:border-white/10;
+    @apply shadow-xl shadow-black/10 dark:shadow-black/30;
+    @apply rounded-2xl p-4;
+    @apply animate-in fade-in-0 zoom-in-95;
+    @apply min-w-[200px];
+  }
+
+  .glass-tooltip-card {
+    @apply bg-gray-100/80 dark:bg-white/5;
+    @apply rounded-xl px-3 py-2;
+  }
+
+  .glass-tooltip-card-highlight {
+    @apply bg-primary/10 dark:bg-primary/15;
+    @apply border border-primary/10;
+    @apply rounded-xl px-3 py-2.5;
+  }
+
+  /* Tooltip Typography */
+  .tooltip-label {
+    @apply text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest;
+  }
+
+  .tooltip-value {
+    @apply text-lg font-bold text-foreground tracking-tight;
+  }
+
+  .tooltip-metric-label {
+    @apply text-xs font-medium text-muted-foreground mb-1;
+  }
+
+  .tooltip-metric-value {
+    @apply text-sm font-bold text-foreground tabular-nums;
+  }
+
+  /* Growth Badge Styles */
+  .badge-growth-positive {
+    @apply bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .badge-growth-negative {
+    @apply bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400;
+  }
+
+  .badge-growth-neutral {
+    @apply bg-gray-100 dark:bg-white/10 text-muted-foreground;
+  }
+
+  .badge-growth {
+    @apply text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5;
+  }
+
   /* Brand Utilities */
   .brand-gradient {
     @apply bg-gradient-to-br from-orange-500 to-red-600;

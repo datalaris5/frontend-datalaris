@@ -20,6 +20,10 @@ export const DashboardService = {
   trenPenjualan: (params) =>
     apiClient.post("/admin/dashboard-tinjauan/tren-penjualan", params),
 
+  // Total Orders per Week (NEW)
+  totalPesananInWeek: (params) =>
+    apiClient.post("/admin/dashboard-tinjauan/total-pesanan/in-week", params),
+
   // High-level methods used by AdminDashboard
   getStats: async (params) => {
     try {
