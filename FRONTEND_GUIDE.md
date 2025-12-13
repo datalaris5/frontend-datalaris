@@ -86,4 +86,105 @@ Semua request ke backend terpusat di `src/services/api.js`.
 
 ---
 
+8. **Standard Chart Tooltips & Logic:**
+   - **Component:** `src/components/common/ChartTooltip.jsx`
+     - **Generic:** Gunakan untuk SEMUA chart.
+     - **Fitur:** Otomatis mendeteksi format (Rupiah/Angka/Persen) dan Growth Badge.
+     - **Growth Logic:** Mencari field `${dataKey}Growth` secara dinamis.
+       - _Contoh:_ Data `sales` -> mencari `salesGrowth`.
+   - **Helper Logic:** `src/utils/chartUtils.js`
+     - Gunakan `calculateMoMGrowth(data, keys)` untuk menghitung growth otomatis.
+     - Gunakan `calculateBasketSize(sales, orders)` untuk hitungan akurat.
+     - Gunakan `aggregateByQuarter(monthlyData)` untuk view kuartalan dengan QoQ growth.
+     - Gunakan `aggregateByDayOfWeek(dailyData)` untuk analisis per hari (rata-rata).
+   - **Rich Tooltip (Hidden Series):**
+     - Jika ingin menampilkan data tambahan di tooltip (misal Basket Size) tapi tidak mau digambar di grafik:
+       - Tambahkan `<Area dataKey="basketSize" stroke="transparent" fill="transparent" />`.
+       - Data akan masuk ke payload tooltip dan otomatis ter-render.
+   - **Growth Indicators:**
+     - **Januari/Awal:** Wajib `null` (Hidden).
+     - **Stagnan:** Wajib `0` (Neutral Badge).
+     - **Naik/Turun:** Hijau/Merah Badge.
+
+---
+
+9. **Centralized Chart Theme:**
+   - **File:** `src/config/chartTheme.js`
+   - **Wajib digunakan** untuk semua chart colors, bukan hardcoded.
+   - **Exports:**
+     | Export | Fungsi |
+     |--------|--------|
+     | `chartColors` | Warna chart (primary, secondary, tertiary) |
+     | `chartUI` | Grid, cursor, axis styles |
+     | `chartGradients` | Gradient definitions untuk Area charts |
+     | `areaStyles` | Style preset untuk Area chart |
+     | `barStyles` | Style preset untuk Bar chart |
+   - **Contoh Penggunaan:**
+
+     ```jsx
+     import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
+
+     <Area stroke={chartColors.primary} fill="url(#colorSales)" />
+     <Tooltip cursor={{ stroke: chartUI.cursor.stroke }} />
+     ```
+
+---
+
+10. **Centralized Tooltip Styles (CSS Utilities):**
+    - **File:** `src/index.css` (dalam `@layer utilities`)
+    - **Container:**
+      | Class | Fungsi |
+      |-------|--------|
+      | `glass-tooltip` | Container utama tooltip (glass effect, blur, shadow) |
+      | `glass-tooltip-card` | Card biasa di dalam tooltip |
+      | `glass-tooltip-card-highlight` | Card dengan highlight primary color |
+    - **Typography:**
+      | Class | Fungsi |
+      |-------|--------|
+      | `tooltip-label` | Label kecil uppercase (PERIODE, HARI) |
+      | `tooltip-value` | Nilai besar (nama bulan/hari) |
+      | `tooltip-metric-label` | Label metric (Total Penjualan) |
+      | `tooltip-metric-value` | Nilai metric (Rp 45.000.000) |
+    - **Growth Badges:**
+      | Class | Fungsi |
+      |-------|--------|
+      | `badge-growth` | Base badge style |
+      | `badge-growth-positive` | Warna hijau (↑) |
+      | `badge-growth-negative` | Warna merah (↓) |
+      | `badge-growth-neutral` | Warna abu (•) |
+
+---
+
+11. **Chart Tooltip Types:**
+    - **`type="auto"`** (Default)
+      - Untuk time-series charts (Sales, Orders trend).
+      - Menampilkan growth badges.
+      - Header: "Periode" + bulan/kuartal.
+    - **`type="dayOfWeek"`**
+      - Untuk kategori (Day of Week Analysis).
+      - TIDAK menampilkan growth (tidak relevan).
+      - Header: "Hari" + nama hari.
+      - Stats: Rata-rata, Total, Sample.
+    - **Contoh:**
+      ```jsx
+      <Tooltip content={<ChartTooltip type="auto" />} />
+      <Tooltip content={<ChartTooltip type="dayOfWeek" />} />
+      ```
+
+---
+
+12. **Dashboard Overview Chart Standards:**
+    - **Chart Tren (Kiri - 2/3 width):**
+      - Tipe: `AreaChart`
+      - Data: Bulanan (default) atau Kuartalan (toggle)
+      - Warna: `chartColors.primary` (orange)
+      - Tooltip: `type="auto"` dengan growth
+    - **Chart Operasional (Kanan - 1/3 width):**
+      - Tipe: `BarChart`
+      - Data: Rata-rata pesanan per hari (mengikuti filter tanggal)
+      - Warna: `chartColors.secondary` (blue)
+      - Tooltip: `type="dayOfWeek"` tanpa growth
+
+---
+
 _Gunakan dokumen ini sebagai acuan pengembangan dan maintenance frontend._
