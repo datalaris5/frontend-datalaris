@@ -116,6 +116,7 @@
     @apply shadow-xl shadow-black/5 dark:shadow-black/20;
     @apply ring-1 ring-black/5 dark:ring-white/5;
     @apply rounded-2xl;
+    @apply relative overflow-hidden;
   }
 
   .glass-card-strong {
@@ -123,6 +124,92 @@
     @apply border border-white/50 dark:border-white/15;
     @apply shadow-2xl shadow-black/10 dark:shadow-black/30;
     @apply ring-1 ring-white/20 dark:ring-white/10;
+    @apply relative overflow-hidden;
+  }
+
+  /* Premium Glass Card - Enhanced dengan subtle effects */
+  .glass-card-premium {
+    @apply bg-white/75 dark:bg-gray-900/75 backdrop-blur-3xl backdrop-saturate-200;
+    @apply border border-white/60 dark:border-white/15;
+    @apply shadow-2xl shadow-black/10 dark:shadow-black/30;
+    @apply ring-1 ring-white/30 dark:ring-white/10;
+    @apply rounded-2xl;
+    @apply relative overflow-hidden;
+    @apply transition-all duration-500 ease-out;
+  }
+
+  /* Hover Glow Effect */
+  .glass-card-premium:hover {
+    @apply shadow-2xl shadow-black/20 dark:shadow-black/40;
+    @apply border-white/70 dark:border-white/20;
+    transform: translateY(-2px);
+  }
+
+  /* Inner Glow for Premium Cards */
+  .glass-card-premium::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse at 50% 0%,
+      rgba(255, 255, 255, 0.15) 0%,
+      transparent 50%
+    );
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .glass-card-premium:hover::before {
+    opacity: 1;
+  }
+
+  /* Animated Border Shine Effect */
+  .card-border-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-border-shine::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: 0.5s;
+    pointer-events: none;
+  }
+
+  .card-border-shine:hover::after {
+    left: 100%;
+  }
+
+  /* Gradient Glow Background for Highlight Cards */
+  .highlight-glow-orange {
+    @apply relative;
+  }
+
+  .highlight-glow-orange::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, #f97316, #ea580c, #dc2626);
+    z-index: -1;
+    filter: blur(12px);
+    opacity: 0.6;
+    border-radius: inherit;
+  }
+
+  .highlight-glow-orange:hover::before {
+    opacity: 0.8;
+    filter: blur(16px);
   }
 
   /* Glass Bar for Headers & Sidebars (No Rounded) */
@@ -298,6 +385,16 @@
     }
   }
 
+  /* Shimmer animation untuk skeleton loading */
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
   .bg-dot-pattern {
     background-image: radial-gradient(#000 1px, transparent 1px);
     background-size: 20px 20px;
@@ -305,5 +402,85 @@
 
   .dark .bg-dot-pattern {
     background-image: radial-gradient(#fff 1px, transparent 1px);
+  }
+
+  /* ============================================
+     METRIC CARD MICRO-INTERACTIONS
+     ============================================ */
+
+  /* Icon bounce on hover */
+  @keyframes iconBounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  .metric-icon-bounce:hover {
+    animation: iconBounce 0.4s ease-in-out;
+  }
+
+  /* Sparkline fade-in */
+  @keyframes sparklineFadeIn {
+    from {
+      opacity: 0;
+      transform: scaleX(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+  }
+
+  .metric-sparkline {
+    animation: sparklineFadeIn 0.6s ease-out;
+    animation-delay: 0.3s;
+    animation-fill-mode: backwards;
+  }
+
+  /* Trend badge pulse for positive trend */
+  @keyframes trendPulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.02);
+    }
+  }
+
+  .trend-badge-pulse {
+    animation: trendPulse 2s ease-in-out infinite;
+  }
+
+  /* Comparison label styling */
+  .metric-comparison {
+    @apply text-[10px] text-muted-foreground/70 font-medium mt-0.5;
+  }
+
+  /* Insight chip styling */
+  .metric-insight-chip {
+    @apply absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full;
+    @apply bg-gradient-to-r from-amber-400/20 to-orange-400/20 text-orange-600 dark:text-orange-400;
+    @apply border border-orange-400/30;
+  }
+
+  /* Value glow effect for highlight metrics */
+  .metric-value-glow {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  }
+
+  /* Progress bar for metric targets */
+  .metric-progress-bar {
+    @apply h-1 rounded-full bg-muted/50 overflow-hidden mt-2;
+  }
+
+  .metric-progress-fill {
+    @apply h-full rounded-full transition-all duration-700 ease-out;
   }
 }

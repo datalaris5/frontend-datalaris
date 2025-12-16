@@ -144,17 +144,78 @@ frontend/
 
 ### ✅ WAJIB PAKAI (Centralized Sources)
 
-| Kebutuhan         | File/Lokasi            | Contoh                                |
-| ----------------- | ---------------------- | ------------------------------------- |
-| **Glass Effect**  | `index.css`            | `.glass-card`, `.glass-bar`           |
-| **Tooltip Chart** | `index.css`            | `.glass-tooltip`, `.tooltip-label`    |
-| **Growth Badge**  | `index.css`            | `.badge-growth-positive`              |
-| **Background**    | `index.css`            | `.mesh-gradient`                      |
-| **Chart Colors**  | `config/chartTheme.ts` | `chartColors.primary`                 |
-| **Chart Styles**  | `config/chartTheme.ts` | `areaStyles.primary`                  |
-| **Icons**         | `lucide-react`         | `<Store size={20} />`                 |
-| **UI Components** | `components/ui/`       | `<Button>`, `<Card>`                  |
-| **Class Merging** | `lib/utils.ts`         | `cn("class1", condition && "class2")` |
+| Kebutuhan             | File/Lokasi                | Contoh                                |
+| --------------------- | -------------------------- | ------------------------------------- |
+| **Glass Effect**      | `index.css`                | `.glass-card`, `.glass-bar`           |
+| **Tooltip Chart**     | `index.css`                | `.glass-tooltip`, `.tooltip-label`    |
+| **Growth Badge**      | `index.css`                | `.badge-growth-positive`              |
+| **Background**        | `index.css`                | `.mesh-gradient`                      |
+| **Chart Colors**      | `config/chartTheme.ts`     | `chartColors.primary`                 |
+| **Chart Styles**      | `config/chartTheme.ts`     | `areaStyles.primary`                  |
+| **Icon Size/Stroke**  | `config/dashboardIcons.ts` | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH`  |
+| **Icon Mapping**      | `config/dashboardIcons.ts` | `overviewIcons.totalSales`            |
+| **Semantic Colors**   | `config/themeConfig.ts`    | `semanticColors.positive`             |
+| **Trend Badge Style** | `config/themeConfig.ts`    | `trendBadgeStyles.up.className`       |
+| **Status Themes**     | `config/themeConfig.ts`    | `statusThemes.positive`               |
+| **Icons**             | `lucide-react`             | `<Store size={20} />`                 |
+| **UI Components**     | `components/ui/`           | `<Button>`, `<Card>`                  |
+| **Class Merging**     | `lib/utils.ts`             | `cn("class1", condition && "class2")` |
+
+### D. INTEGRASI API DASHBOARD (WAJIB)
+
+Saat memanggil endpoint Dashboard (`/admin/dashboard-tinjauan/*`), **WAJIB** mengirimkan `marketplace_id` dalam payload.
+Backend membutuhkannya untuk menentukan tabel mana yang akan di-query.
+
+**Contoh Payload yang Benar:**
+
+```typescript
+{
+  store_id: 1,
+  marketplace_id: 1, // REQUIRED! Ambil dari store.marketplace_id
+  date_from: "2025-01-01",
+  date_to: "2025-01-31"
+}
+```
+
+### 🚨 ATURAN KETAT: SENTRALISASI KODING (WAJIB!)
+
+> [!CAUTION] > **DILARANG KERAS** menulis kode hardcoded di halaman/komponen jika sudah ada config terpusat!
+
+#### Prinsip Utama
+
+1. **Config dulu, pakai kemudian** - Jika butuh value (warna, size, style), cek dulu apakah sudah ada di config files
+2. **Jangan duplikat** - Jika value dipakai di >1 tempat, WAJIB pindah ke config terpusat
+3. **Konsistensi** - Semua komponen sejenis HARUS pakai config yang sama
+
+#### Config Files yang Tersedia
+
+| File                       | Isi                                          | Contoh Penggunaan                    |
+| -------------------------- | -------------------------------------------- | ------------------------------------ |
+| `config/dashboardIcons.ts` | Icon mapping, size, strokeWidth              | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH` |
+| `config/themeConfig.ts`    | Semantic colors, status themes, trend styles | `trendBadgeStyles.up.className`      |
+| `config/chartTheme.ts`     | Chart colors, gradients, styles              | `chartColors.primary`                |
+| `index.css`                | Utility classes, animations                  | `.glass-card-premium`                |
+
+#### Contoh Benar vs Salah
+
+```tsx
+// ❌ SALAH - Hardcode values
+<Icon size={14} strokeWidth={2} />
+<span className="bg-emerald-500/10 text-emerald-600">↑</span>
+
+// ✅ BENAR - Pakai config terpusat
+import { ICON_SIZES, ICON_STROKE_WIDTH } from "@/config/dashboardIcons";
+import { trendBadgeStyles } from "@/config/themeConfig";
+
+<Icon size={ICON_SIZES.sm} strokeWidth={ICON_STROKE_WIDTH} />
+<span className={trendBadgeStyles.up.className}>{trendBadgeStyles.up.arrow}</span>
+```
+
+#### Kapan Menambah Config Baru
+
+- Jika value dipakai di **≥2 tempat** → WAJIB pindah ke config
+- Jika value mungkin berubah (warna, size) → WAJIB di config
+- Jika value bagian dari **design system** → WAJIB di config
 
 ---
 
@@ -543,17 +604,19 @@ Semua workflow tersimpan di: `.agent/workflows/`
 
 ## 📜 Changelog
 
-| Tanggal    | Perubahan                                             |
-| ---------- | ----------------------------------------------------- |
-| 2024-12-15 | Reorganisasi docs ke folder /docs                     |
-| 2024-12-15 | AI Communication Protocol & Document Update Strategy  |
-| 2024-12-15 | Scope Protection Rules ditambahkan                    |
-| 2024-12-15 | Format header distandardisasi                         |
-| 2024-12-15 | API Catalog dibuat, API Update Protocol ditambahkan   |
-| 2024-12-15 | Store & Marketplace Service terintegrasi              |
-| 2024-12-14 | Migrasi TypeScript 100% complete                      |
-| 2024-12-14 | Tambah deployment configs (vercel.json, netlify.toml) |
-| 2024-12-14 | Dokumentasi aturan terpusat dan design system         |
+| Tanggal    | Perubahan                                                   |
+| ---------- | ----------------------------------------------------------- |
+| 2024-12-16 | Aturan ketat sentralisasi koding ditambahkan                |
+| 2024-12-16 | Config files ditambahkan: dashboardIcons.ts, themeConfig.ts |
+| 2024-12-15 | Reorganisasi docs ke folder /docs                           |
+| 2024-12-15 | AI Communication Protocol & Document Update Strategy        |
+| 2024-12-15 | Scope Protection Rules ditambahkan                          |
+| 2024-12-15 | Format header distandardisasi                               |
+| 2024-12-15 | API Catalog dibuat, API Update Protocol ditambahkan         |
+| 2024-12-15 | Store & Marketplace Service terintegrasi                    |
+| 2024-12-14 | Migrasi TypeScript 100% complete                            |
+| 2024-12-14 | Tambah deployment configs (vercel.json, netlify.toml)       |
+| 2024-12-14 | Dokumentasi aturan terpusat dan design system               |
 
 ---
 

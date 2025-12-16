@@ -28,20 +28,21 @@ import {
   Tooltip,
   BarChart,
   Bar,
+  Cell,
 } from "recharts";
 import {
-  ShoppingBag,
-  Users,
-  DollarSign,
-  MousePointer,
-  Package,
+  Banknote,
+  ShoppingCart,
+  Percent,
+  ShoppingBasket,
+  UsersRound,
+  UserPlus,
   Upload,
-  LucideIcon,
+  Trophy,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useFilter } from "@/context/FilterContext";
 import { api } from "@/services/api";
-import FeatureNotReady from "@/components/common/FeatureNotReady";
 import {
   format,
   parseISO,
@@ -50,7 +51,6 @@ import {
   eachMonthOfInterval,
 } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
-import CountUp from "react-countup";
 import { useNavigate } from "react-router-dom";
 import ChartTooltip from "@/components/common/ChartTooltip";
 import {
@@ -58,79 +58,45 @@ import {
   calculateBasketSize,
   aggregateByQuarter,
   aggregateByDayOfWeek,
+  formatAxisValue,
 } from "@/utils/chartUtils";
 import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
+import TabToggle from "@/components/ui/TabToggle";
 
-// === TYPES ===
+// Shared Components
+import { MetricCard, InsightBanner } from "@/components/dashboard";
+import type {
+  DashboardMetric,
+  SparklineItem,
+  MetricData,
+  SalesDataPoint,
+  OrdersDayDataPoint,
+  StoreItem,
+} from "@/types/dashboard.types";
+import { semanticStatusThemes } from "@/types/dashboard.types";
 
-interface SparklineItem {
-  tanggal: string;
-  total: number;
-}
-
-interface MetricData {
-  current: number;
-  percent: number;
-  trend: string;
-  sparkline: SparklineItem[];
-}
-
-interface OverviewMetric {
-  title: string;
-  value: number;
-  format: "currency" | "number" | "percent";
-  trend: string;
-  trendUp: boolean;
-  data: number[];
-  icon: LucideIcon;
-  highlight?: boolean;
-  isDummy: boolean;
-  color: string;
-  suffix?: string;
-}
-
-interface SalesDataPoint {
-  originalDate?: Date;
-  monthKey: string;
-  displayMonth: string;
-  sales: number;
-  orders: number;
-  basketSize: number;
-  salesGrowth?: number;
-  ordersGrowth?: number;
-  basketSizeGrowth?: number;
-}
-
-interface OrdersDayDataPoint {
-  displayMonth: string;
-  orders: number;
-  dayName?: string;
-  avgSales?: number;
-}
-
-interface StoreItem {
-  id?: string | number;
-}
+// Chart data key type
+type ChartDataKey = "sales" | "orders" | "basketSize";
 
 // === MAIN COMPONENT ===
 
 const DashboardOverview: React.FC = () => {
-  const { store, stores, dateRange } = useFilter();
+  const { store, stores, dateRange, marketplaces } = useFilter(); // markets needed for debug if any
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
   // Chart state
-  const [activeTab, setActiveTab] = useState("sales");
   const [salesData, setSalesData] = useState<SalesDataPoint[]>([]);
   const [salesViewMode, setSalesViewMode] = useState<"monthly" | "quarterly">(
     "monthly"
   );
+  const [activeChartTab, setActiveChartTab] = useState<ChartDataKey>("sales");
   const [ordersDayData, setOrdersDayData] = useState<OrdersDayDataPoint[]>([]);
   const [rawMonthlyData, setRawMonthlyData] = useState<SalesDataPoint[]>([]);
-  const [avgMonthlyOrders, setAvgMonthlyOrders] = useState(0);
 
   // Metrics state
-  const [metrics, setMetrics] = useState<OverviewMetric[]>([
+  const [metrics, setMetrics] = useState<DashboardMetric[]>([
     {
       title: "Total Penjualan",
       value: 0,
@@ -138,10 +104,10 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: DollarSign,
-      highlight: true,
+      icon: Banknote,
+      highlight: false, // Unified glass - no solid highlight
       isDummy: false,
-      color: "orange",
+      color: "teal", // Primary KPI accent
     },
     {
       title: "Total Pesanan",
@@ -150,7 +116,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingBag,
+      icon: ShoppingCart,
       isDummy: false,
       color: "blue",
     },
@@ -161,7 +127,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: false,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: MousePointer,
+      icon: Percent,
       isDummy: false,
       color: "purple",
     },
@@ -172,7 +138,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingBag,
+      icon: ShoppingBasket,
       isDummy: false,
       color: "emerald",
     },
@@ -183,19 +149,19 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: false,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Users,
+      icon: UsersRound,
       isDummy: false,
       color: "cyan",
     },
     {
-      title: "Produk Terjual",
+      title: "Pembeli Baru",
       value: 0,
       format: "number",
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Package,
-      isDummy: true,
+      icon: UserPlus,
+      isDummy: true, // API endpoint belum tersedia
       color: "pink",
     },
   ]);
@@ -233,7 +199,13 @@ const DashboardOverview: React.FC = () => {
         if (store === "all") {
           targetStores = stores.filter((s: StoreItem) => s && s.id);
         } else {
-          targetStores = [{ id: store }];
+          // Find full store object to get marketplace_id
+          const selectedStore = stores.find(
+            (s) => s.id.toString() === store.toString()
+          );
+          if (selectedStore) {
+            targetStores = [selectedStore];
+          }
         }
 
         if (targetStores.length === 0) {
@@ -241,11 +213,15 @@ const DashboardOverview: React.FC = () => {
           return;
         }
 
-        const fetchStoreMetrics = async (id: string | number) => {
+        const fetchStoreMetrics = async (
+          id: string | number,
+          marketplaceId: number
+        ) => {
           const payload = {
             store_id: id,
             date_from: fromDate,
             date_to: toDate,
+            marketplace_id: marketplaceId,
           };
           const [salesRes, ordersRes, visitorsRes, crRes, bsRes] =
             await Promise.all([
@@ -273,7 +249,11 @@ const DashboardOverview: React.FC = () => {
         };
 
         if (store !== "all" && targetStores.length === 1) {
-          const res = await fetchStoreMetrics(targetStores[0].id!);
+          const currentStore = targetStores[0];
+          const res = await fetchStoreMetrics(
+            currentStore.id!,
+            currentStore.marketplace_id!
+          );
           setMetrics((prev) => {
             const newMetrics = [...prev];
             const update = (
@@ -305,7 +285,9 @@ const DashboardOverview: React.FC = () => {
         } else {
           // Multi-store aggregation
           const results = await Promise.all(
-            targetStores.map((s) => fetchStoreMetrics(s.id!))
+            targetStores.map((s) =>
+              fetchStoreMetrics(s.id!, s.marketplace_id || 1)
+            )
           );
 
           let aggSales: MetricData = {
@@ -432,16 +414,23 @@ const DashboardOverview: React.FC = () => {
       if (store === "all") {
         targetStores = stores.filter((s: StoreItem) => s && s.id);
       } else {
-        targetStores = [{ id: store }];
+        const selectedStore = stores.find(
+          (s) => s.id.toString() === store.toString()
+        );
+        if (selectedStore) targetStores = [selectedStore];
       }
 
       if (targetStores.length === 0) return;
 
-      const fetchStoreChart = async (id: string | number) => {
+      const fetchStoreChart = async (
+        id: string | number,
+        marketplaceId: number
+      ) => {
         const payload = {
           store_id: id,
           date_from: startOfYearDate,
           date_to: endOfYearDate,
+          marketplace_id: marketplaceId,
         };
         const [salesRes, ordersRes] = await Promise.all([
           api.dashboard.totalPenjualan(payload),
@@ -455,7 +444,7 @@ const DashboardOverview: React.FC = () => {
 
       try {
         const results = await Promise.all(
-          targetStores.map((s) => fetchStoreChart(s.id!))
+          targetStores.map((s) => fetchStoreChart(s.id!, s.marketplace_id!))
         );
 
         results.forEach((res) => {
@@ -531,7 +520,10 @@ const DashboardOverview: React.FC = () => {
       if (store === "all") {
         targetStores = stores.filter((s: StoreItem) => s && s.id);
       } else {
-        targetStores = [{ id: store }];
+        const selectedStore = stores.find(
+          (s) => s.id.toString() === store.toString()
+        );
+        if (selectedStore) targetStores = [selectedStore];
       }
 
       if (targetStores.length === 0) return;
@@ -543,6 +535,7 @@ const DashboardOverview: React.FC = () => {
               store_id: s.id!,
               date_from: fromDate,
               date_to: toDate,
+              marketplace_id: s.marketplace_id!,
             };
             const ordersRes = await api.dashboard.totalPesanan(payload);
             return ordersRes.data?.data?.sparkline || [];
@@ -599,10 +592,22 @@ const DashboardOverview: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Insight Banner */}
+      <InsightBanner
+        metrics={metrics}
+        ordersDayData={ordersDayData}
+        loading={loading}
+      />
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-none">
         {metrics.map((metric, index) => (
-          <MetricCard key={index} metric={metric} />
+          <MetricCard
+            key={index}
+            metric={metric}
+            loading={loading}
+            staggerIndex={index}
+          />
         ))}
       </div>
 
@@ -611,36 +616,42 @@ const DashboardOverview: React.FC = () => {
         {/* Main Chart - Analisa Tren */}
         <div className="lg:col-span-2 h-full min-h-0">
           <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
-            <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg font-bold">
-                  Analisa Tren
-                </CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Tren penjualan, jumlah order, dan pertumbuhan
-                </p>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
-                <button
-                  onClick={() => setSalesViewMode("monthly")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                    salesViewMode === "monthly"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  }`}
-                >
-                  Bulanan
-                </button>
-                <button
-                  onClick={() => setSalesViewMode("quarterly")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                    salesViewMode === "quarterly"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  }`}
-                >
-                  Kuartal
-                </button>
+            <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-bold">
+                    Analisa Tren
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {activeChartTab === "sales" && "Tren total penjualan"}
+                    {activeChartTab === "orders" && "Tren jumlah pesanan"}
+                    {activeChartTab === "basketSize" &&
+                      "Tren rata-rata nilai keranjang"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Data Tabs */}
+                  <TabToggle
+                    items={[
+                      { value: "sales", label: "Penjualan" },
+                      { value: "orders", label: "Pesanan" },
+                      { value: "basketSize", label: "Basket Size" },
+                    ]}
+                    activeValue={activeChartTab}
+                    onChange={setActiveChartTab}
+                    variant="primary"
+                  />
+                  {/* Period Toggle */}
+                  <TabToggle
+                    items={[
+                      { value: "monthly", label: "Bulanan" },
+                      { value: "quarterly", label: "Kuartal" },
+                    ]}
+                    activeValue={salesViewMode}
+                    onChange={setSalesViewMode}
+                    variant="secondary"
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
@@ -679,44 +690,60 @@ const DashboardOverview: React.FC = () => {
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(val) => {
-                      if (val >= 1000000000)
-                        return `${(val / 1000000000).toFixed(1)}M`;
-                      if (val >= 1000000)
-                        return `${(val / 1000000).toFixed(0)}jt`;
-                      if (val >= 1000) return `${(val / 1000).toFixed(0)}rb`;
-                      return val;
-                    }}
+                    tickFormatter={formatAxisValue}
                     tick={{ fontSize: 10 }}
                   />
                   <Tooltip
                     content={<ChartTooltip type="auto" />}
                     cursor={{ stroke: chartUI.cursor.stroke }}
                   />
+                  {/* Dynamic Area based on activeChartTab */}
                   <Area
                     type="monotone"
-                    dataKey="sales"
-                    name="Total Penjualan"
+                    dataKey={activeChartTab}
+                    name={
+                      activeChartTab === "sales"
+                        ? "Total Penjualan"
+                        : activeChartTab === "orders"
+                        ? "Total Pesanan"
+                        : "Basket Size"
+                    }
                     stroke={chartColors.primary}
                     fill="url(#colorSales)"
                     strokeWidth={3}
+                    animationDuration={500}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="orders"
-                    name="Total Pesanan"
-                    stroke="transparent"
-                    fill="transparent"
-                    strokeWidth={0}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="basketSize"
-                    name="Basket Size"
-                    stroke="transparent"
-                    fill="transparent"
-                    strokeWidth={0}
-                  />
+                  {/* Hidden areas for tooltip data */}
+                  {activeChartTab !== "sales" && (
+                    <Area
+                      type="monotone"
+                      dataKey="sales"
+                      name="Total Penjualan"
+                      stroke="transparent"
+                      fill="transparent"
+                      strokeWidth={0}
+                    />
+                  )}
+                  {activeChartTab !== "orders" && (
+                    <Area
+                      type="monotone"
+                      dataKey="orders"
+                      name="Total Pesanan"
+                      stroke="transparent"
+                      fill="transparent"
+                      strokeWidth={0}
+                    />
+                  )}
+                  {activeChartTab !== "basketSize" && (
+                    <Area
+                      type="monotone"
+                      dataKey="basketSize"
+                      name="Basket Size"
+                      stroke="transparent"
+                      fill="transparent"
+                      strokeWidth={0}
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
@@ -727,12 +754,38 @@ const DashboardOverview: React.FC = () => {
         <div className="h-full min-h-0">
           <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
             <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
-              <CardTitle className="text-lg font-bold">
-                Analisa Operasional
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Rata-rata pesanan per hari (sesuai filter)
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold">
+                    Analisa Operasional
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Rata-rata pesanan per hari (sesuai filter)
+                  </p>
+                </div>
+                {/* Best Day Badge */}
+                {ordersDayData.length > 0 &&
+                  (() => {
+                    const bestDay = ordersDayData.reduce((max, day) =>
+                      day.orders > max.orders ? day : max
+                    );
+                    const highlightTheme = semanticStatusThemes.highlight;
+                    return bestDay.orders > 0 ? (
+                      <div
+                        className={`flex items-center gap-2 px-3 py-1.5 ${highlightTheme.bg} border ${highlightTheme.border} rounded-full`}
+                      >
+                        <Trophy
+                          className={`w-4 h-4 ${highlightTheme.iconText}`}
+                        />
+                        <span
+                          className={`text-xs font-semibold ${highlightTheme.text} dark:${highlightTheme.textDark}`}
+                        >
+                          Best: {bestDay.full || bestDay.displayMonth}
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
+              </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -765,9 +818,28 @@ const DashboardOverview: React.FC = () => {
                   <Bar
                     dataKey="orders"
                     name="Rata-rata Pesanan"
-                    fill={chartColors.secondary}
                     radius={[4, 4, 0, 0]}
-                  />
+                    animationDuration={500}
+                  >
+                    {ordersDayData.map((entry, index) => {
+                      const maxOrders = Math.max(
+                        ...ordersDayData.map((d) => d.orders)
+                      );
+                      const isBestDay =
+                        entry.orders === maxOrders && entry.orders > 0;
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            isBestDay
+                              ? chartColors.primary
+                              : chartColors.secondary
+                          }
+                          className={isBestDay ? "animate-pulse" : ""}
+                        />
+                      );
+                    })}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -777,190 +849,4 @@ const DashboardOverview: React.FC = () => {
     </div>
   );
 };
-
-// === METRIC CARD COMPONENT ===
-
-interface MetricCardProps {
-  metric: OverviewMetric;
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({ metric }) => {
-  const colorThemes: Record<
-    string,
-    { iconBg: string; iconText: string; accent: string; accentClass: string }
-  > = {
-    blue: {
-      iconBg: "bg-gradient-to-br from-blue-500 to-indigo-500",
-      iconText: "text-white",
-      accent: "#3b82f6",
-      accentClass: "from-blue-500 to-blue-500/80",
-    },
-    emerald: {
-      iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
-      iconText: "text-white",
-      accent: "#10b981",
-      accentClass: "from-emerald-500 to-emerald-500/80",
-    },
-    purple: {
-      iconBg: "bg-gradient-to-br from-purple-500 to-violet-500",
-      iconText: "text-white",
-      accent: "#a855f7",
-      accentClass: "from-purple-500 to-purple-500/80",
-    },
-    orange: {
-      iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
-      iconText: "text-white",
-      accent: "#f97316",
-      accentClass: "from-orange-500 to-orange-500/80",
-    },
-    cyan: {
-      iconBg: "bg-gradient-to-br from-cyan-500 to-sky-500",
-      iconText: "text-white",
-      accent: "#06b6d4",
-      accentClass: "from-cyan-500 to-cyan-500/80",
-    },
-    green: {
-      iconBg: "bg-gradient-to-br from-green-500 to-emerald-600",
-      iconText: "text-white",
-      accent: "#22c55e",
-      accentClass: "from-green-500 to-green-500/80",
-    },
-    pink: {
-      iconBg: "bg-gradient-to-br from-pink-500 to-rose-500",
-      iconText: "text-white",
-      accent: "#ec4899",
-      accentClass: "from-pink-500 to-pink-500/80",
-    },
-  };
-  const theme = colorThemes[metric.color] || colorThemes.blue;
-
-  const highlightThemes: Record<string, string> = {
-    blue: "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 shadow-blue-500/40",
-    orange:
-      "bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 shadow-orange-500/40",
-    purple:
-      "bg-gradient-to-br from-purple-600 via-purple-700 to-fuchsia-800 shadow-purple-500/40",
-  };
-  const highlightClass = metric.highlight
-    ? `${
-        highlightThemes[metric.color] || highlightThemes.blue
-      } text-white border-transparent shadow-2xl ring-1 ring-white/20`
-    : "glass-card hover:shadow-2xl";
-
-  return (
-    <div className="h-full">
-      <FeatureNotReady
-        blur={metric.isDummy}
-        overlay={metric.isDummy}
-        message="Segera Hadir"
-      >
-        <Card
-          className={`relative overflow-hidden h-full transition-all duration-300 hover:scale-[1.02] rounded-2xl ${highlightClass}`}
-        >
-          {!metric.highlight && (
-            <div
-              className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-gradient-to-b ${theme.accentClass}`}
-            />
-          )}
-          <div className="absolute -bottom-3 -right-3 opacity-[0.08] rotate-12 pointer-events-none">
-            <metric.icon size={64} />
-          </div>
-          <div className="relative z-10 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div
-                className={`p-2.5 rounded-xl shadow-lg ${
-                  metric.highlight
-                    ? "bg-white/20 text-white shadow-white/10"
-                    : `${theme.iconBg} ${theme.iconText} shadow-${metric.color}-500/30`
-                }`}
-              >
-                <metric.icon size={18} strokeWidth={2.5} />
-              </div>
-              <h3
-                className={`text-xs font-semibold leading-tight ${
-                  metric.highlight ? "text-white/90" : "text-muted-foreground"
-                }`}
-              >
-                {metric.title}
-              </h3>
-            </div>
-            <p
-              className={`text-2xl font-extrabold tracking-tight mb-2 ${
-                metric.highlight ? "text-white" : "text-foreground"
-              }`}
-            >
-              <CountUp
-                start={0}
-                end={metric.value}
-                duration={2.0}
-                separator="."
-                decimal=","
-                decimals={
-                  metric.format === "currency"
-                    ? 0
-                    : metric.format === "number" && metric.value % 1 !== 0
-                    ? 2
-                    : 0
-                }
-                prefix={metric.format === "currency" ? "Rp" : ""}
-                suffix={metric.format === "percent" ? "%" : metric.suffix || ""}
-              />
-            </p>
-            <div className="flex items-center justify-between">
-              <span
-                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                  metric.highlight
-                    ? "bg-white/20 text-white"
-                    : metric.trendUp
-                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
-                }`}
-              >
-                {metric.trendUp ? "↑" : "↓"} {metric.trend}
-              </span>
-              <div className="w-16 h-8">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={metric.data.map((v, i) => ({ i, v }))}>
-                    <defs>
-                      <linearGradient
-                        id={`grad-${metric.color}`}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="0%"
-                          stopColor={
-                            metric.highlight ? "#ffffff" : theme.accent
-                          }
-                          stopOpacity={0.5}
-                        />
-                        <stop
-                          offset="100%"
-                          stopColor={
-                            metric.highlight ? "#ffffff" : theme.accent
-                          }
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke={metric.highlight ? "#ffffff" : theme.accent}
-                      fill={`url(#grad-${metric.color})`}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </FeatureNotReady>
-    </div>
-  );
-};
-
 export default DashboardOverview;

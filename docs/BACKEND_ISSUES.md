@@ -17,7 +17,7 @@
 | Status          | Jumlah | Keterangan           |
 | --------------- | ------ | -------------------- |
 | 🔴 **Critical** | 2      | Blocking fitur utama |
-| 🟠 **High**     | 2      | Dibutuhkan segera    |
+| 🟠 **High**     | 3      | Dibutuhkan segera    |
 | 🟡 **Medium**   | 2      | Nice to have         |
 | ✅ **Resolved** | 0      | Sudah diperbaiki     |
 
@@ -26,6 +26,31 @@
 # 🔴 CRITICAL ISSUES
 
 Issue yang **memblokir fitur utama**. Prioritas tertinggi.
+
+---
+
+## CRIT-003: Dashboard Data Shopee Hilang (Case Sensitivity)
+
+| Field            | Detail                             |
+| ---------------- | ---------------------------------- |
+| **Status**       | 🔴 Open                            |
+| **Komponen**     | Dashboard Tinjauan                 |
+| **File Backend** | `dashboard_tinjauan_controller.go` |
+| **Dilaporkan**   | 2024-12-16                         |
+
+### 🐛 Masalah
+
+Backend menggunakan validasi nama marketplace yang **Case Sensitive** (`== "Shopee"`).
+Data di database user kadang tersimpan sebagai `"shopee"` (huruf kecil).
+Akibatnya, query data di-skip dan dashboard mengembalikan 0.
+
+### 💡 Rekomendasi Solusi
+
+Ubah logic backend menjadi **Case Insensitive**:
+
+```go
+if strings.EqualFold(marketplace.Name, constant.ShopeeConst) { ... }
+```
 
 ---
 
@@ -252,6 +277,71 @@ Tambahkan field di response endpoint yang sudah ada:
 ```
 
 Dengan ini, Frontend bisa kalkulasi sendiri.
+
+---
+
+## HIGH-003: API Pembeli Baru Belum Ada
+
+| Field                   | Detail                                        |
+| ----------------------- | --------------------------------------------- |
+| **Status**              | 🟠 Open                                       |
+| **Tipe**                | Feature Request                               |
+| **Komponen**            | Dashboard Tinjauan                            |
+| **Endpoint Dibutuhkan** | `POST /admin/dashboard-tinjauan/pembeli-baru` |
+| **Dilaporkan**          | 2024-12-16                                    |
+
+### 📋 Kebutuhan
+
+Frontend membutuhkan metric **"Pembeli Baru"** di Dashboard Tinjauan menggunakan field `total_pembeli_baru` yang sudah ada di database.
+
+**Field di Database:**
+
+```sql
+-- shopee_data_upload_details table
+total_pembeli_baru int
+```
+
+**Endpoint yang dibutuhkan:**
+
+- ❌ `POST /admin/dashboard-tinjauan/pembeli-baru` - **BELUM ADA**
+
+### 💥 Dampak
+
+- ❌ MetricCard "Pembeli Baru" di Dashboard Tinjauan menampilkan **data dummy**
+- ❌ User tidak bisa tracking pertumbuhan customer baru
+
+### 💡 Rekomendasi Solusi
+
+**Buat Endpoint Baru:**
+
+```go
+// dashboard_tinjauan_controller.go
+func GetDashboardTinjauanPembeliBaru(c *gin.Context) {
+    // Query: SUM(total_pembeli_baru) dengan filter store_id, date range
+    // Return format sama dengan endpoint lain:
+    // { total, percent, trend, sparkline }
+}
+```
+
+**Register Route:**
+
+```go
+// routes.go
+auth.POST("/admin/dashboard-tinjauan/pembeli-baru", controllers.GetDashboardTinjauanPembeliBaru)
+```
+
+**Expected Response:**
+
+```json
+{
+  "data": {
+    "total": 250,
+    "percent": 15.5,
+    "trend": "Up",
+    "sparkline": [10, 15, 12, 18, 20, 25, 22]
+  }
+}
+```
 
 ---
 
