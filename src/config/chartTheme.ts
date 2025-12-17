@@ -65,15 +65,15 @@ export interface GradientConfig {
   end: { offset: string; color: string; opacity: number };
 }
 
-export const chartGradients: Record<string, GradientConfig> = {
+export const chartGradients = {
   primary: {
     id: "primaryGradient",
-    start: { offset: "5%", color: chartColors.primary, opacity: 0.3 },
+    start: { offset: "5%", color: chartColors.primary, opacity: 0.2 },
     end: { offset: "95%", color: chartColors.primary, opacity: 0 },
   },
   secondary: {
     id: "secondaryGradient",
-    start: { offset: "5%", color: chartColors.secondary, opacity: 0.3 },
+    start: { offset: "5%", color: chartColors.secondary, opacity: 0.2 },
     end: { offset: "95%", color: chartColors.secondary, opacity: 0 },
   },
 };

@@ -16,6 +16,7 @@ export interface SparklineItem {
 
 export interface MetricData {
   current: number;
+  previous?: number; // Previous period value for comparison tooltip
   percent: number;
   trend: string;
   sparkline: SparklineItem[];
@@ -37,6 +38,8 @@ export type MetricFormat = "currency" | "number" | "percent";
 export interface DashboardMetric {
   title: string;
   value: number;
+  previousValue?: number; // Previous period value for tooltip
+  periodLabel?: string; // e.g., "Des 2024" for comparison label
   format: MetricFormat;
   suffix?: string;
   trend: string;

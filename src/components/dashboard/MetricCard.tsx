@@ -14,6 +14,13 @@
 
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  TooltipPortal,
+} from "@/components/ui/tooltip";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import CountUp from "react-countup";
 import FeatureNotReady from "@/components/common/FeatureNotReady";
@@ -56,6 +63,22 @@ const sparklineVariants = {
     scaleX: 1,
     transition: { delay: 0.3, duration: 0.5, ease: "easeOut" },
   },
+};
+
+// Helper function untuk format value
+const formatMetricValue = (
+  value: number,
+  format: "currency" | "number" | "percent",
+  suffix?: string
+): string => {
+  const formatted = new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: format === "currency" ? 0 : 2,
+  }).format(value);
+
+  if (format === "currency") return `Rp ${formatted}`;
+  if (format === "percent") return `${formatted}%`;
+  return suffix ? `${formatted}${suffix}` : formatted;
 };
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -153,11 +176,71 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
             {/* Comparison & Sparkline row */}
             <div className="flex items-end justify-between mt-1">
-              {/* Comparison text */}
-              {!metric.isDummy && (
-                <span className="text-[9px] text-muted-foreground/60">
-                  vs periode lalu
-                </span>
+              {/* Comparison with tooltip */}
+              {!metric.isDummy && metric.previousValue !== undefined && (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[9px] text-muted-foreground/60 border-b border-dotted border-muted-foreground/30 cursor-help">
+                        vs periode lalu
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        side="top"
+                        sideOffset={8}
+                        className="bg-popover/95 backdrop-blur-sm border-border/50 px-3 py-2 z-[100]"
+                      >
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Periode ini:
+                            </span>
+                            <span className="font-semibold text-foreground">
+                              {formatMetricValue(
+                                metric.value,
+                                metric.format,
+                                metric.suffix
+                              )}
+                            </span>
+                          </div>
+                          {metric.previousValue !== undefined && (
+                            <>
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-muted-foreground">
+                                  Periode lalu:
+                                </span>
+                                <span className="font-medium text-muted-foreground">
+                                  {formatMetricValue(
+                                    metric.previousValue,
+                                    metric.format,
+                                    metric.suffix
+                                  )}
+                                </span>
+                              </div>
+                              <div className="pt-1 border-t border-border/50">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Pertumbuhan:
+                                  </span>
+                                  <span
+                                    className={`font-bold ${
+                                      metric.trendUp
+                                        ? "text-emerald-500"
+                                        : "text-red-500"
+                                    }`}
+                                  >
+                                    {metric.trendUp ? "↑" : "↓"} {metric.trend}
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </Tooltip>
+                </TooltipProvider>
               )}
 
               {/* Mini sparkline - compact */}

@@ -17,39 +17,308 @@
 ## 📋 Daftar Isi
 
 1. [Tech Stack](#-tech-stack)
-2. [Struktur Folder](#-struktur-folder)
-3. [Aturan Terpusat (WAJIB!)](#-aturan-terpusat-wajib)
-4. [Styling & Design System](#-styling--design-system)
-5. [TypeScript Standards](#-typescript-standards)
-6. [API & Backend Connection](#-api--backend-connection)
-7. [Environment Variables](#-environment-variables)
-8. [Deployment](#-deployment)
-9. [Dashboard Standards](#-dashboard-standards)
-10. [Dokumentasi & Komentar](#-dokumentasi--komentar)
-11. [Scope Protection Rules](#-scope-protection-rules-wajib-untuk-ai)
-12. [AI Communication Protocol](#-ai-communication-protocol)
-13. [Document Update Strategy](#-document-update-strategy)
-14. [Workflow Commands](#-workflow-commands)
-15. [Changelog](#-changelog)
+2. [React Query & Data Fetching](#-react-query--data-fetching)
+3. [Struktur Folder](#-struktur-folder)
+4. [Aturan Terpusat (WAJIB!)](#-aturan-terpusat-wajib)
+5. [Styling & Design System](#-styling--design-system)
+6. [TypeScript Standards](#-typescript-standards)
+7. [API & Backend Connection](#-api--backend-connection)
+8. [Environment Variables](#-environment-variables)
+9. [Deployment](#-deployment)
+10. [Dashboard Standards](#-dashboard-standards)
+11. [Dokumentasi & Komentar](#-dokumentasi--komentar)
+12. [Scope Protection Rules](#-scope-protection-rules-wajib-untuk-ai)
+13. [AI Communication Protocol](#-ai-communication-protocol)
+14. [Document Update Strategy](#-document-update-strategy)
+15. [Workflow Commands](#-workflow-commands)
+16. [Changelog](#-changelog)
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Kategori          | Teknologi             | Versi    | Catatan             |
-| ----------------- | --------------------- | -------- | ------------------- |
-| **Framework**     | React                 | 19.x     | Dengan Hooks        |
-| **Language**      | TypeScript            | 5.x      | Strict mode enabled |
-| **Build Tool**    | Vite                  | 7.x      | Fast HMR            |
-| **Styling**       | Tailwind CSS          | 3.x      | + Custom utilities  |
-| **UI Components** | shadcn/ui             | Latest   | Di `components/ui/` |
-| **Icons**         | Lucide React          | Latest   | WAJIB pakai ini     |
-| **Charts**        | Recharts              | 2.x      | + Custom theme      |
-| **Routing**       | React Router DOM      | 7.x      | v7 data APIs        |
-| **HTTP Client**   | Axios                 | 1.x      | Instance terpusat   |
-| **Forms**         | React Hook Form + Zod | Latest   | Validasi schema     |
-| **State**         | React Context         | Built-in | Auth, Filter, Theme |
-| **Notifications** | React Hot Toast       | 2.x      | Toast notifications |
+| Kategori           | Teknologi               | Versi    | Catatan              |
+| ------------------ | ----------------------- | -------- | -------------------- |
+| **Framework**      | React                   | 19.x     | Dengan Hooks         |
+| **Language**       | TypeScript              | 5.x      | Strict mode enabled  |
+| **Build Tool**     | Vite                    | 7.x      | Fast HMR             |
+| **Styling**        | Tailwind CSS            | 3.x      | + Custom utilities   |
+| **UI Components**  | shadcn/ui               | Latest   | Di `components/ui/`  |
+| **Icons**          | Lucide React            | Latest   | WAJIB pakai ini      |
+| **Charts**         | Recharts                | 2.x      | + Custom theme       |
+| **Routing**        | React Router DOM        | 7.x      | v7 data APIs         |
+| **HTTP Client**    | Axios                   | 1.x      | Instance terpusat    |
+| **Data Fetching**  | TanStack React Query    | 5.x      | Auto caching + retry |
+| **Forms**          | React Hook Form + Zod   | Latest   | Validasi schema      |
+| **State**          | React Context + Zustand | Built-in | Auth, Filter, Theme  |
+| **Notifications**  | React Hot Toast         | 2.x      | Toast notifications  |
+| **Utilities**      | Lodash                  | 4.x      | Data aggregation     |
+| **Virtualization** | TanStack Virtual        | 3.x      | For large tables     |
+
+---
+
+## ⚡ React Query & Data Fetching
+
+### Overview
+
+**TanStack React Query** digunakan untuk semua data fetching di dashboard untuk mendapatkan:
+
+- ✅ Auto caching (5 menit stale time)
+- ✅ Auto retry on error (1x)
+- ✅ Background refetch saat window focus
+- ✅ Loading & error states otomatis
+- ✅ DevTools untuk debugging
+
+### Setup
+
+**QueryClient** sudah dikonfigurasi di `src/lib/queryClient.ts`:
+
+```typescript
+import { QueryClient } from "@tanstack/react-query";
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // Cache 5 menit
+      gcTime: 10 * 60 * 1000, // Keep cache 10 menit
+      retry: 1, // Retry 1x on error
+      refetchOnWindowFocus: true, // Refetch saat focus
+      refetchOnReconnect: true, // Refetch saat reconnect
+    },
+  },
+});
+```
+
+**App wrapped** di `src/main.tsx`:
+
+```typescript
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { queryClient } from "./lib/queryClient";
+
+<QueryClientProvider client={queryClient}>
+  <App />
+  <ReactQueryDevtools initialIsOpen={false} />
+</QueryClientProvider>;
+```
+
+### Helper Functions
+
+**File: `utils/dashboardHelpers.ts`**
+
+Reusable helpers untuk semua dashboard:
+
+| Function              | Purpose                        | Usage                                         |
+| --------------------- | ------------------------------ | --------------------------------------------- |
+| `getTargetStores()`   | Filter stores (single/all)     | `getTargetStores(store, stores)`              |
+| `formatDateRange()`   | Format date untuk API          | `formatDateRange(dateRange)`                  |
+| `buildPayload()`      | Build API payload              | `buildPayload(storeId, marketplaceId, dates)` |
+| `extractMetricData()` | Parse API response             | `extractMetricData(response)`                 |
+| `mergeSparklines()`   | Merge sparklines (multi-store) | `mergeSparklines(arrays)`                     |
+| `aggregateMetrics()`  | Aggregate multi-store data     | `aggregateMetrics(results)`                   |
+
+**File: `utils/formatters.ts`**
+
+Currency dan number formatters:
+
+| Function                | Purpose       | Example Output |
+| ----------------------- | ------------- | -------------- |
+| `formatCurrency()`      | Format Rupiah | "Rp 1.500.000" |
+| `formatShortCurrency()` | Kort format   | "Rp1.5jt"      |
+| `formatNumber()`        | Format angka  | "1.500.000"    |
+| `formatPercent()`       | Format persen | "15.0%"        |
+
+### Custom Hooks Pattern
+
+**Struktur hook untuk dashboard metrics:**
+
+```typescript
+// hooks/useDashboardMetrics.ts
+import { useQuery } from "@tanstack/react-query";
+import { useFilter } from "@/context/FilterContext";
+import { api } from "@/services/api";
+import {
+  getTargetStores,
+  formatDateRange,
+  buildPayload,
+  extractMetricData,
+  aggregateMetrics,
+} from "@/utils/dashboardHelpers";
+
+export function useDashboardMetrics() {
+  const { store, stores, dateRange } = useFilter();
+
+  return useQuery({
+    queryKey: ["dashboard", "overview", "metrics", store, dateRange],
+    queryFn: async () => {
+      const targetStores = getTargetStores(store, stores);
+      if (!targetStores.length) return null;
+
+      const dates = formatDateRange(dateRange);
+      const results = await Promise.all(
+        targetStores.map((s) =>
+          fetchStoreMetrics(s.id!, s.marketplace_id!, dates)
+        )
+      );
+
+      return results.length === 1 ? results[0] : aggregateMetrics(results);
+    },
+    enabled: !!dateRange?.startDate && stores.length > 0,
+  });
+}
+```
+
+**Usage di component:**
+
+```typescript
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+
+const DashboardOverview = () => {
+  // Hook handles everything: fetching, caching, loading, error
+  const { data: metricsData, isLoading, error } = useDashboardMetrics();
+
+  // Update metrics state dari hook data
+  useEffect(() => {
+    if (!metricsData) return;
+    setMetrics((prev) => {
+      // Update logic here
+    });
+  }, [metricsData]);
+};
+```
+
+### Dashboard Migration Status
+
+| Dashboard               | Hooks Created                     | Migration Status | Code Reduction |
+| ----------------------- | --------------------------------- | ---------------- | -------------- |
+| **Overview (Tinjauan)** | ✅ Metrics + Charts               | ✅ Complete      | -340 baris     |
+| **Ads (Iklan)**         | ✅ useAdsDashboardMetrics (ready) | ⏳ Pending       | ~300 baris     |
+| **Chat**                | ⏳ To create                      | ⏳ Pending       | ~300 baris     |
+| **Orders**              | ⏳ To create                      | ⏳ Pending       | ~200 baris     |
+| **Products**            | ⏳ To create                      | ⏳ Pending       | ~150 baris     |
+
+**Overview Details:**
+
+- Hooks: `useDashboardMetrics.ts` + `useOverviewChartData.ts`
+- Error handling: Toast notifications
+- Loading states: Skeleton components
+- Code: 853 → 513 lines (40% reduction)
+- Status: Production-ready ✅
+
+### Migration Guide untuk Dashboard Lain
+
+**Pattern yang sudah proven (dari Overview):**
+
+1. **Create custom hook** (`hooks/useXDashboardMetrics.ts`)
+
+   - Copy pattern dari `useDashboardMetrics.ts` atau `useAdsDashboardMetrics.ts`
+   - Update API calls untuk dashboard tersebut
+   - Use helpers: `getTargetStores`, `formatDateRange`, `buildPayload`, etc.
+
+2. **Remove local code**
+
+   - Delete local `MetricCard` component (~150 baris)
+   - Delete local `formatCurrency` helper (use from `utils/formatters.ts`)
+   - Delete local `mergeSparklines` helper (use from `utils/dashboardHelpers.ts`)
+   - Delete manual fetch `useEffect` logic (~150-200 baris)
+
+3. **Integrate shared components**
+
+   - Import `MetricCard` dari `@/components/dashboard`
+   - Import hook: `import { useXDashboardMetrics } from '@/hooks/useXDashboardMetrics'`
+   - Use hook: `const { data, isLoading } = useXDashboardMetrics()`
+
+4. **Test**
+   - Single store works
+   - Multi-store ("Semua Toko") aggregation works
+   - Date filter works
+   - Check DevTools for caching
+
+**Expected impact per dashboard:** ~200-300 baris code reduction
+
+### DevTools Usage
+
+Di development mode, tekan **React Query DevTools** icon untuk:
+
+- View all cached queries
+- See query status (fresh/stale/fetching)
+- Manual refetch
+- Inspect query data
+- Debug performance issues
+
+### Common Pitfalls
+
+❌ **Query key tidak include dateRange:**
+
+```typescript
+queryKey: ["dashboard", store]; // WRONG!
+```
+
+✅ **Correct:**
+
+```typescript
+queryKey: ["dashboard", "overview", "metrics", store, dateRange];
+```
+
+❌ **Missing enabled condition:**
+
+```typescript
+useQuery({ queryKey, queryFn }); // Runs even without data!
+```
+
+✅ **Correct:**
+
+```typescript
+useQuery({
+  queryKey,
+  queryFn,
+  enabled: !!dateRange?.startDate && stores.length > 0,
+});
+```
+
+---
+
+### Best Practice Improvements
+
+**Dashboard Overview sudah mengimplementasikan semua best practices:**
+
+1. **Error Toast Notifications**
+
+   - Error state dari React Query hook
+   - Toast notification untuk user feedback
+   - Auto dismiss setelah 4 detik
+
+   ```typescript
+   useEffect(() => {
+     if (metricsError) {
+       toast.error("Gagal memuat data metrik. Silakan coba lagi.");
+     }
+   }, [metricsError]);
+   ```
+
+2. **Skeleton Loading**
+
+   - MetricCardSkeleton component
+   - Loading state shows dashboard structure
+   - Better UX than spinner
+
+   ```tsx
+   {metricsLoading ? (
+     Array.from({ length: 6 }).map((_, i) => (
+       <MetricCardSkeleton key={i} highlight={i < 2} />
+     ))
+   ) : (
+     metrics.map(metric => <MetricCard ... />)
+   )}
+   ```
+
+3. **Complete Hook Integration**
+   - `useDashboardMetrics` untuk metrics
+   - `useOverviewChartData` untuk charts
+   - NO manual fetch logic remaining
+   - 100% centralized pattern
+
+**Impact:** 853 → 513 lines (-340 baris, 40% reduction!)
 
 ---
 
@@ -189,12 +458,13 @@ Backend membutuhkannya untuk menentukan tabel mana yang akan di-query.
 
 #### Config Files yang Tersedia
 
-| File                       | Isi                                          | Contoh Penggunaan                    |
-| -------------------------- | -------------------------------------------- | ------------------------------------ |
-| `config/dashboardIcons.ts` | Icon mapping, size, strokeWidth              | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH` |
-| `config/themeConfig.ts`    | Semantic colors, status themes, trend styles | `trendBadgeStyles.up.className`      |
-| `config/chartTheme.ts`     | Chart colors, gradients, styles              | `chartColors.primary`                |
-| `index.css`                | Utility classes, animations                  | `.glass-card-premium`                |
+| File                        | Isi                                          | Contoh Penggunaan                      |
+| --------------------------- | -------------------------------------------- | -------------------------------------- |
+| `config/dashboardIcons.ts`  | Icon mapping, size, strokeWidth              | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH`   |
+| `config/themeConfig.ts`     | Semantic colors, status themes, trend styles | `trendBadgeStyles.up.className`        |
+| `config/chartTheme.ts`      | Chart colors, gradients, styles              | `chartColors.primary`                  |
+| `config/animationConfig.ts` | Centralized framer-motion variants           | `fadeInUpVariants`, `staggerContainer` |
+| `index.css`                 | Utility classes, animations                  | `.glass-card-premium`                  |
 
 #### Contoh Benar vs Salah
 
@@ -415,12 +685,21 @@ Semua URL redirect ke `/index.html` (sudah dikonfigurasi di platform files).
 - Gunakan struktur: Icon (kiri) + Value (tengah) + Footer (trend)
 - Animasi value dengan `CountUp`
 - Sparkline dengan `ResponsiveContainer > AreaChart`
+- **Skeleton:** Gunakan `<MetricCardSkeleton />` saat loading
 
 ### Charts
 
 - **Wajib** import dari `@/config/chartTheme`
 - **Tooltip:** Gunakan `<ChartTooltip />` dari `common/`
-- **Grid:** `strokeDasharray="3 3"` opacity rendah
+- **Grid:** `strokeDasharray="3 3"` opacity rendah (0.05)
+- **Stroke:** `strokeWidth={2.5}`
+- **Skeleton:** Gunakan `<ChartSkeleton />` saat loading
+
+### Animations
+
+- **Library:** Framer Motion
+- **Config:** Import variants dari `@/config/animationConfig`
+- **Pattern:** Staggered entry (kontainer) + Fade Up (item)
 
 ### Page Header
 
@@ -606,6 +885,7 @@ Semua workflow tersimpan di: `.agent/workflows/`
 
 | Tanggal    | Perubahan                                                   |
 | ---------- | ----------------------------------------------------------- |
+| 2024-12-17 | React Query integration guide & Dashboard migration status  |
 | 2024-12-16 | Aturan ketat sentralisasi koding ditambahkan                |
 | 2024-12-16 | Config files ditambahkan: dashboardIcons.ts, themeConfig.ts |
 | 2024-12-15 | Reorganisasi docs ke folder /docs                           |
