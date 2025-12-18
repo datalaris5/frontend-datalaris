@@ -27,7 +27,6 @@ import { ShopeeLogo, TikTokLogo } from "../common/Icons";
 import { useAuth } from "@/context/AuthContext";
 import { useFilter } from "@/context/FilterContext";
 import ThemeToggle from "../common/ThemeToggle";
-import DateRangePicker from "../common/DateRangePicker";
 
 // Shadcn UI Components
 import { Button } from "@/components/ui/button";
@@ -227,18 +226,6 @@ const Header: React.FC = () => {
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* ===== Date Range Picker ===== */}
-        <div className="hidden xl:block">
-          <DateRangePicker
-            maxDate={new Date(new Date().setDate(new Date().getDate() - 2))}
-            minDate={
-              window.location.pathname.includes("orders")
-                ? new Date(2025, 5, 1)
-                : new Date(2024, 0, 1)
-            }
-          />
-        </div>
       </div>
 
       {/* Bagian kanan: Theme, Notifications, Profile */}

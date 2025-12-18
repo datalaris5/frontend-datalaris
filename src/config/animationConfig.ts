@@ -47,3 +47,18 @@ export const fadeInVariants = {
     transition: { duration: 0.4 },
   },
 };
+
+// Chart content transition (saat switch tab)
+export const chartContentVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] as const },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    transition: { duration: 0.2 },
+  },
+};

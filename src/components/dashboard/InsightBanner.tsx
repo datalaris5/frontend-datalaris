@@ -9,13 +9,13 @@
  *  Hari terbaik: Sabtu dengan rata-rata 234 pesanan."
  */
 
-import React from "react";
-import { TrendingUp, TrendingDown, Sparkles, Calendar } from "lucide-react";
+import React, { useMemo } from "react";
+import { Sparkles, Calendar } from "lucide-react";
 import type {
   DashboardMetric,
   OrdersDayDataPoint,
 } from "@/types/dashboard.types";
-import { semanticStatusThemes } from "@/types/dashboard.types";
+import { generateSmartInsight } from "@/utils/insightUtils";
 
 interface InsightBannerProps {
   metrics: DashboardMetric[];
@@ -28,10 +28,10 @@ const InsightBanner: React.FC<InsightBannerProps> = ({
   ordersDayData,
   loading = false,
 }) => {
-  // Loading skeleton
+  // 1. Loading skeleton (Unchanged)
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-4 mb-4 animate-pulse">
+      <div className="glass-card rounded-xl py-3 px-4 mb-4 animate-pulse">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-muted" />
           <div className="flex-1 space-y-2">
@@ -43,105 +43,80 @@ const InsightBanner: React.FC<InsightBannerProps> = ({
     );
   }
 
-  // Ambil data dari metrics
-  const salesMetric = metrics.find((m) => m.title === "Total Penjualan");
+  // 2. Generate Smart Insight using Centralized Logic
+  // Memoize result to prevent re-calculation on every render
+  const insight = useMemo(() => generateSmartInsight(metrics), [metrics]);
 
-  // Hitung best day
-  const bestDay =
-    ordersDayData.length > 0
-      ? ordersDayData.reduce((max, day) =>
-          day.orders > max.orders ? day : max
-        )
-      : null;
+  // 3. Hitung best day (Secondary Insight - tetap disimpan sebagai trivia tambahan)
+  const bestDay = useMemo(
+    () =>
+      ordersDayData.length > 0
+        ? ordersDayData.reduce((max, day) =>
+            day.orders > max.orders ? day : max
+          )
+        : null,
+    [ordersDayData]
+  );
 
-  // Generate insights
-  const salesTrend = salesMetric?.trendUp ?? true;
-  const salesPercent = salesMetric?.trend ?? "0%";
-  const hasSalesData = salesMetric && salesMetric.value > 0;
   const hasBestDay = bestDay && bestDay.orders > 0;
+  // Jangan tampilkan best day jika sedang mode Hazard/Critical, fokus ke masalah.
+  const showBestDay =
+    hasBestDay && insight.type !== "hazard" && insight.type !== "neutral";
 
-  // Select theme based on trend
-  const theme = salesTrend
-    ? semanticStatusThemes.positive
-    : semanticStatusThemes.negative;
-  const neutralTheme = semanticStatusThemes.neutral;
-
-  // Jika tidak ada data sama sekali
-  if (!hasSalesData && !hasBestDay) {
-    return (
-      <div
-        className={`glass-card rounded-2xl p-4 mb-4 border-l-4 ${neutralTheme.border}`}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full ${neutralTheme.iconBg}`}>
-            <Sparkles className={`w-5 h-5 ${neutralTheme.iconText}`} />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">
-              Upload data untuk melihat insight performa toko Anda.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // 4. Render Dynamic UI
   return (
     <div
-      className={`glass-card rounded-2xl p-4 mb-4 border-l-4 transition-all duration-300 ${theme.border} ${theme.bg}`}
+      className={`glass-card rounded-xl py-3 px-4 mb-4 border-l-4 transition-all duration-300 ${insight.theme.border} ${insight.theme.bg}`}
     >
-      <div className="flex items-start gap-3">
-        {/* Icon */}
-        <div className={`p-2 rounded-full ${theme.iconBg} ${theme.iconText}`}>
-          {salesTrend ? (
-            <TrendingUp className="w-5 h-5" />
-          ) : (
-            <TrendingDown className="w-5 h-5" />
+      <div className="flex items-center gap-4">
+        {/* Dynamic Icon */}
+        <div
+          className={`p-2 rounded-full flex-shrink-0 ${insight.theme.iconBg} ${insight.theme.iconText}`}
+        >
+          <insight.icon className="w-5 h-5" />
+        </div>
+
+        {/* Content Area - Horizontal Layout */}
+        <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+          {/* Main Insight Message */}
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <span className="font-bold whitespace-nowrap">{insight.title}</span>
+            <span className="hidden md:inline text-muted-foreground/40">•</span>
+            <span
+              className={`${insight.theme.text} dark:${insight.theme.textDark} leading-tight font-medium`}
+            >
+              {insight.message}
+            </span>
+          </div>
+
+          {/* Secondary Insight (Trivia: Best Day) - Badge Style for Unity */}
+          {showBestDay && (
+            <div
+              className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${insight.theme.bg.replace(
+                "bg-",
+                "bg-white/40 dark:bg-black/10"
+              )}`}
+            >
+              <Calendar
+                className={`w-3.5 h-3.5 ${insight.theme.iconText} opacity-70`}
+              />
+              <span className="text-muted-foreground whitespace-nowrap">
+                Puncak Pesanan Toko:{" "}
+                <span className="text-foreground font-semibold">
+                  Hari {bestDay?.full}
+                </span>{" "}
+                <span className="opacity-70">
+                  (Rata-rata {bestDay?.orders.toLocaleString("id-ID")} Pesanan)
+                </span>
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Main insight */}
-          <p className="text-sm font-medium text-foreground">
-            {hasSalesData && (
-              <>
-                <span className="font-bold">Total Penjualan</span>
-                {salesTrend ? (
-                  <span className={`${theme.text} dark:${theme.textDark}`}>
-                    {" "}
-                    naik {salesPercent}
-                  </span>
-                ) : (
-                  <span className={`${theme.text} dark:${theme.textDark}`}>
-                    {" "}
-                    turun {salesPercent}
-                  </span>
-                )}{" "}
-                dari periode sebelumnya.
-              </>
-            )}
-          </p>
-
-          {/* Secondary insight - Best Day */}
-          {hasBestDay && (
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              Hari terbaik:{" "}
-              <span className="font-semibold text-foreground">
-                {bestDay.full || bestDay.displayMonth}
-              </span>{" "}
-              dengan rata-rata{" "}
-              <span className="font-semibold text-foreground">
-                {bestDay.orders.toLocaleString("id-ID")}
-              </span>{" "}
-              pesanan
-            </p>
-          )}
-        </div>
-
-        {/* Sparkle decoration */}
-        <Sparkles className="w-4 h-4 text-muted-foreground/30 flex-shrink-0" />
+        {/* Sparkle Decoration (Only for positive vibes) */}
+        {(insight.type === "achievement" || insight.type === "efficiency") && (
+          <Sparkles className="w-4 h-4 text-yellow-500/50 flex-shrink-0 animate-pulse ml-2" />
+        )}
       </div>
     </div>
   );

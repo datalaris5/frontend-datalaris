@@ -156,22 +156,28 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 metric.highlight ? "text-white" : "text-foreground"
               }`}
             >
-              <CountUp
-                start={0}
-                end={metric.value}
-                duration={1.8}
-                separator="."
-                decimal=","
-                decimals={
-                  metric.format === "currency"
-                    ? 0
-                    : metric.format === "number" && metric.value % 1 !== 0
-                    ? 2
-                    : 0
-                }
-                prefix={metric.format === "currency" ? "Rp " : ""}
-                suffix={metric.format === "percent" ? "%" : metric.suffix || ""}
-              />
+              {metric.value === 0 ? (
+                <span className="text-muted-foreground/50">—</span>
+              ) : (
+                <CountUp
+                  start={0}
+                  end={metric.value}
+                  duration={1.8}
+                  separator="."
+                  decimal=","
+                  decimals={
+                    metric.format === "currency"
+                      ? 0
+                      : metric.format === "number" && metric.value % 1 !== 0
+                      ? 2
+                      : 0
+                  }
+                  prefix={metric.format === "currency" ? "Rp " : ""}
+                  suffix={
+                    metric.format === "percent" ? "%" : metric.suffix || ""
+                  }
+                />
+              )}
             </p>
 
             {/* Comparison & Sparkline row */}

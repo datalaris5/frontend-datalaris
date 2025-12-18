@@ -60,8 +60,9 @@ export function useDashboardMetrics() {
   const { store, stores, dateRange } = useFilter();
 
   return useQuery({
-    // Query key untuk caching (unique per store + dateRange)
-    queryKey: ["dashboard", "overview", "metrics", store, dateRange],
+    // Query key untuk caching (unique per store + dateRange + stores list)
+    // Add stores to dependency to refetch when stores are loaded
+    queryKey: ["dashboard", "overview", "metrics", store, dateRange, stores],
 
     // Fetch function
     queryFn: async () => {

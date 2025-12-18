@@ -26,12 +26,13 @@
 8. [Environment Variables](#-environment-variables)
 9. [Deployment](#-deployment)
 10. [Dashboard Standards](#-dashboard-standards)
-11. [Dokumentasi & Komentar](#-dokumentasi--komentar)
-12. [Scope Protection Rules](#-scope-protection-rules-wajib-untuk-ai)
-13. [AI Communication Protocol](#-ai-communication-protocol)
-14. [Document Update Strategy](#-document-update-strategy)
-15. [Workflow Commands](#-workflow-commands)
-16. [Changelog](#-changelog)
+11. [Data Filtering Standards](#-data-filtering-standards)
+12. [Dokumentasi & Komentar](#-dokumentasi--komentar)
+13. [Scope Protection Rules](#-scope-protection-rules-wajib-untuk-ai)
+14. [AI Communication Protocol](#-ai-communication-protocol)
+15. [Document Update Strategy](#-document-update-strategy)
+16. [Workflow Commands](#-workflow-commands)
+17. [Changelog](#-changelog)
 
 ---
 
@@ -199,10 +200,10 @@ const DashboardOverview = () => {
 
 **Overview Details:**
 
-- Hooks: `useDashboardMetrics.ts` + `useOverviewChartData.ts`
+- Hooks: `useDashboardMetrics.ts`, `useOverviewChartData.ts`, `useOperationalChartData.ts`
 - Error handling: Toast notifications
 - Loading states: Skeleton components
-- Code: 853 → 513 lines (40% reduction)
+- Code: 853 → ~470 lines (45% reduction)
 - Status: Production-ready ✅
 
 ### Migration Guide untuk Dashboard Lain
@@ -498,8 +499,14 @@ import { trendBadgeStyles } from "@/config/themeConfig";
 <div className="glass-card p-6">...</div>
 <header className="glass-bar border-b">...</header>
 
-// ❌ SALAH - Hardcode manual
+// ❌ SALAH - Hardcode manual & Opaque Colors
 <div className="bg-white/70 backdrop-blur-xl border...">...</div>
+<div className="bg-indigo-50 ...">...</div> <!-- ❌ Opaque in light mode (menutup efek kaca) -->
+
+// ✅ BENAR - True Glass (Alpha Channels)
+// Gunakan warna level 500 dengan opacity rendah (10-25%)
+// agar efek blur tetap terlihat dan menyatu di Light Mode & Dark Mode
+<div className="bg-indigo-500/25 backdrop-blur-md">...</div>
 ```
 
 ### Utility Classes Tersedia (`index.css`)
@@ -687,6 +694,15 @@ Semua URL redirect ke `/index.html` (sudah dikonfigurasi di platform files).
 - Sparkline dengan `ResponsiveContainer > AreaChart`
 - **Skeleton:** Gunakan `<MetricCardSkeleton />` saat loading
 
+### Smart Insight Banner (`InsightBanner.tsx`)
+
+- **Philosophy**: Komponen ini bertindak sebagai **"Konsultan Bisnis AI"**, bukan sekadar pelapor data statis. Memberikan saran aksi berdasarkan korelasi data.
+- **Logic**: Menggunakan `generateSmartInsight` (`utils/insightUtils.ts`) untuk mendeteksi pola seperti "Traffic Waste" (Traffic naik, CR turun) atau "Efficiency" (Sales stabil, CR naik).
+- **Visuals**:
+  - **True Glassmorphism (WAJIB)**: Gunakan semantic alpha colors (`bg-indigo-500/25` Light / `bg-indigo-900/30` Dark) agar backdrop blur terlihat. **DILARANG** menggunakan solid `bg-indigo-50`.
+  - **Balanced**: Icon indikator di kiri, pesan utama di tengah, dan badge data sekunder (e.g. "Puncak Order") di kanan.
+- **Terminology**: Gunakan bahasa bisnis yang profesional dan menenangkan (e.g. "Koreksi Wajar" bukan "Penjualan Turun", "Puncak Order" bukan "Hari Rame").
+
 ### Charts
 
 - **Wajib** import dari `@/config/chartTheme`
@@ -709,6 +725,35 @@ Semua URL redirect ke `/index.html` (sudah dikonfigurasi di platform files).
 ### Feature Not Ready
 
 Gunakan wrapper `<FeatureNotReady>` untuk fitur yang belum siap.
+
+---
+
+## 🗓️ Data Filtering Standards
+
+### Lokasi Filter
+
+- **Local Context**: Filter tanggal WAJIB berada di halaman dashboard masing-masing (`src/pages/Dashboard/*/index.tsx`), bukan di Header global.
+- **Position**: Sejajar dengan Page Title atau Action Buttons di area Header halaman.
+- **Why**: Memberikan konteks yang lebih jelas dan kontrol granular per dashboard.
+
+### Date Picker Component
+
+- **Component**: Gunakan `<DateRangePicker />` dari `src/components/common/`.
+- **Behavior Standard**:
+  - **Auto-Apply**: Popover menutup dan filter aktif otomatis saat tanggal akhir dipilih (mengurangi klik).
+  - **Sticky Preferences**: Menyimpan pilihan preset terakhir (e.g. "30 Hari Terakhir") di `localStorage` agar user tidak perlu atur ulang saat refresh.
+  - **Linked Calendars**: Navigasi kalender ganda TERKUNCI berurutan (Bulan X dan Bulan X+1) untuk mencegah duplikasi tampilan bulan.
+  - **Presets**: Wajib sediakan preset analitik ("Hari Ini", "Kemarin", "7 Hari", "30 Hari", "Bulan Ini", "Bulan Lalu").
+
+### Styling Rules
+
+- **Compact Size**: Gunakan tinggi `h-10` (bukan `h-12`) untuk button trigger agar seimbang dengan element header lainnya.
+- **Semantic Colors (WAJIB)**:
+  - **DILARANG** menggunakan hardcoded color (e.g. `bg-orange-500`).
+  - **GUNAKAN** semantic tokens:
+    - Background: `bg-primary` atau `bg-primary/10`
+    - Text: `text-primary` atau `text-primary-foreground`
+    - Border/Ring: `border-primary` atau `ring-primary/20`
 
 ---
 

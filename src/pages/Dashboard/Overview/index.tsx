@@ -42,20 +42,14 @@ import {
   Upload,
   Trophy,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useFilter } from "@/context/FilterContext";
 import { api } from "@/services/api";
 import toast from "react-hot-toast";
-import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import ChartTooltip from "@/components/common/ChartTooltip";
-import {
-  aggregateByQuarter,
-  aggregateByDayOfWeek,
-  formatAxisValue,
-} from "@/utils/chartUtils";
-import { buildPayload, getTargetStores } from "@/utils/dashboardHelpers";
+import { aggregateByQuarter, formatAxisValue } from "@/utils/chartUtils";
 import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
 import TabToggle from "@/components/ui/TabToggle";
 
@@ -68,19 +62,25 @@ import MetricCardSkeleton from "@/components/dashboard/MetricCardSkeleton";
 import ChartSkeleton from "@/components/dashboard/ChartSkeleton";
 
 // Shared Components
-import { MetricCard, InsightBanner } from "@/components/dashboard";
+import {
+  MetricCard,
+  InsightBanner,
+  ChartEmptyState,
+} from "@/components/dashboard";
+import DateRangePicker from "@/components/common/DateRangePicker";
 import type {
   DashboardMetric,
-  SparklineItem,
   SalesDataPoint,
   OrdersDayDataPoint,
-  StoreItem,
+  StoreItem, // Keep StoreItem just in case used elsewhere, though seemingly not needed directly anymore? Checking usage: getTargetStores is gone.
 } from "@/types/dashboard.types";
 import { semanticStatusThemes } from "@/types/dashboard.types";
 import {
   staggerContainerVariants,
   fadeInUpVariants,
+  chartContentVariants,
 } from "@/config/animationConfig";
+import { useOperationalChartData } from "@/hooks/useOperationalChartData";
 
 // Chart data key type
 type ChartDataKey = "sales" | "orders" | "basketSize";
@@ -112,10 +112,12 @@ const DashboardOverview: React.FC = () => {
     "monthly"
   );
   const [activeChartTab, setActiveChartTab] = useState<ChartDataKey>("sales");
-  const [ordersDayData, setOrdersDayData] = useState<OrdersDayDataPoint[]>([]);
   const [monthlyChartData, setMonthlyChartData] = useState<SalesDataPoint[]>(
     []
   );
+
+  // New Hook: Operational Chart Data
+  const { data: ordersDayData = [] } = useOperationalChartData();
 
   // Metrics state
   const [metrics, setMetrics] = useState<DashboardMetric[]>([
@@ -329,51 +331,7 @@ const DashboardOverview: React.FC = () => {
 
     // Set sales data (monthly mode by default)
     setSalesData(chartData);
-
-    // For Analisa Operasional: Fetch real daily data from API
-    const fetchDailyDataForOperational = async () => {
-      const targetStores = getTargetStores(store, stores);
-      if (targetStores.length === 0) return;
-
-      const fromDate = dateRange?.startDate
-        ? format(dateRange.startDate, "yyyy-MM-dd")
-        : "";
-      const toDate = dateRange?.endDate
-        ? format(dateRange.endDate, "yyyy-MM-dd")
-        : "";
-
-      if (!fromDate || !toDate) return;
-
-      try {
-        const results = await Promise.all(
-          targetStores.map(async (s) => {
-            const payload = buildPayload(s.id!, s.marketplace_id || 1, {
-              fromDate,
-              toDate,
-            });
-            const ordersRes = await api.dashboard.totalPesanan(payload);
-            return ordersRes.data?.data?.sparkline || [];
-          })
-        );
-
-        // Merge all daily sparkline data from all stores
-        let allDailyOrders: SparklineItem[] = [];
-        results.forEach((sparkline) => {
-          if (sparkline && sparkline.length > 0) {
-            allDailyOrders = [...allDailyOrders, ...sparkline];
-          }
-        });
-
-        // Aggregate by day of week
-        const dayOfWeekData = aggregateByDayOfWeek(allDailyOrders);
-        setOrdersDayData(dayOfWeekData);
-      } catch (error) {
-        console.error("Error fetching operational chart data:", error);
-      }
-    };
-
-    fetchDailyDataForOperational();
-  }, [chartData, chartLoading, store, stores, dateRange]);
+  }, [chartData]);
 
   // 4. Handle Sales View Mode Toggle
   useEffect(() => {
@@ -397,13 +355,19 @@ const DashboardOverview: React.FC = () => {
       <div className="flex items-center justify-between flex-none pt-1">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            Dashboard Tinjauan
+            Tinjauan Bisnis
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Ringkasan performa toko Anda
+            Pantau kesehatan dan pertumbuhan toko secara komprehensif.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Filter Tanggal */}
+          <DateRangePicker
+            minDate={new Date(2024, 0, 1)}
+            maxDate={new Date()}
+          />
+
           <button
             onClick={() => navigate("/upload")}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
@@ -497,123 +461,158 @@ const DashboardOverview: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={salesData}
-                    margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorSales"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset={chartGradients.primary.start.offset}
-                          stopColor={chartGradients.primary.start.color}
-                          stopOpacity={chartGradients.primary.start.opacity}
-                        />
-                        <stop
-                          offset={chartGradients.primary.end.offset}
-                          stopColor={chartGradients.primary.end.color}
-                          stopOpacity={chartGradients.primary.end.opacity}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="displayMonth"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                        fontWeight: 500,
-                      }}
-                      tickMargin={10}
-                      dy={10}
-                      interval={0}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={formatAxisValue}
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                        fontWeight: 500,
-                      }}
-                      tickMargin={8}
-                    />
-                    <Tooltip
-                      content={<ChartTooltip type="auto" />}
-                      cursor={{ stroke: chartUI.cursor.stroke }}
-                    />
-                    {/* Dynamic Area based on activeChartTab */}
-                    <Area
-                      type="monotone"
-                      dataKey={activeChartTab}
-                      name={
-                        activeChartTab === "sales"
-                          ? "Total Penjualan"
-                          : activeChartTab === "orders"
-                          ? "Total Pesanan"
-                          : "Basket Size"
-                      }
-                      stroke={chartColors.primary}
-                      fill="url(#colorSales)"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      activeDot={{
-                        r: 6,
-                        fill: chartColors.primary,
-                        stroke: "#fff",
-                        strokeWidth: 3,
-                        style: {
-                          filter:
-                            "drop-shadow(0 2px 4px rgba(249, 115, 22, 0.3))",
-                        },
-                      }}
-                    />
-                    {/* Hidden areas for tooltip data */}
-                    {activeChartTab !== "sales" && (
-                      <Area
-                        type="monotone"
-                        dataKey="sales"
-                        name="Total Penjualan"
-                        stroke="transparent"
-                        fill="transparent"
-                        strokeWidth={0}
+                <AnimatePresence mode="wait">
+                  {salesData.length === 0 ? (
+                    <motion.div
+                      key="empty"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
+                    >
+                      <ChartEmptyState
+                        title="Data Belum Tersedia"
+                        message="Upload data penjualan untuk melihat analisa tren."
+                        action={{
+                          label: "Upload Data",
+                          onClick: () => navigate("/upload"),
+                        }}
                       />
-                    )}
-                    {activeChartTab !== "orders" && (
-                      <Area
-                        type="monotone"
-                        dataKey="orders"
-                        name="Total Pesanan"
-                        stroke="transparent"
-                        fill="transparent"
-                        strokeWidth={0}
-                      />
-                    )}
-                    {activeChartTab !== "basketSize" && (
-                      <Area
-                        type="monotone"
-                        dataKey="basketSize"
-                        name="Basket Size"
-                        stroke="transparent"
-                        fill="transparent"
-                        strokeWidth={0}
-                      />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={activeChartTab}
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full w-full"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={salesData}
+                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="colorSales"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset={chartGradients.primary.start.offset}
+                                stopColor={chartGradients.primary.start.color}
+                                stopOpacity={
+                                  chartGradients.primary.start.opacity
+                                }
+                              />
+                              <stop
+                                offset={chartGradients.primary.end.offset}
+                                stopColor={chartGradients.primary.end.color}
+                                stopOpacity={chartGradients.primary.end.opacity}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                            opacity={0.1}
+                          />
+                          <XAxis
+                            dataKey="displayMonth"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{
+                              fontSize: 10,
+                              fill: "hsl(var(--muted-foreground))",
+                              fontWeight: 500,
+                            }}
+                            tickMargin={10}
+                            dy={10}
+                            interval={0}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatAxisValue}
+                            tick={{
+                              fontSize: 10,
+                              fill: "hsl(var(--muted-foreground))",
+                              fontWeight: 500,
+                            }}
+                            tickMargin={8}
+                          />
+                          <Tooltip
+                            content={<ChartTooltip type="auto" />}
+                            cursor={{ stroke: chartUI.cursor.stroke }}
+                          />
+                          {/* Dynamic Area based on activeChartTab */}
+                          <Area
+                            type="monotone"
+                            dataKey={activeChartTab}
+                            name={
+                              activeChartTab === "sales"
+                                ? "Total Penjualan"
+                                : activeChartTab === "orders"
+                                ? "Total Pesanan"
+                                : "Basket Size"
+                            }
+                            stroke={chartColors.primary}
+                            fill="url(#colorSales)"
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            animationDuration={500}
+                            animationEasing="ease-out"
+                            activeDot={{
+                              r: 6,
+                              fill: chartColors.primary,
+                              stroke: "#fff",
+                              strokeWidth: 3,
+                              style: {
+                                filter:
+                                  "drop-shadow(0 2px 4px rgba(249, 115, 22, 0.3))",
+                              },
+                            }}
+                          />
+                          {/* Hidden areas for tooltip data */}
+                          {activeChartTab !== "sales" && (
+                            <Area
+                              type="monotone"
+                              dataKey="sales"
+                              name="Total Penjualan"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                          {activeChartTab !== "orders" && (
+                            <Area
+                              type="monotone"
+                              dataKey="orders"
+                              name="Total Pesanan"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                          {activeChartTab !== "basketSize" && (
+                            <Area
+                              type="monotone"
+                              dataKey="basketSize"
+                              name="Basket Size"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </CardContent>
             </Card>
           )}
@@ -661,60 +660,92 @@ const DashboardOverview: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={ordersDayData}
-                    margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="displayMonth"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                      dy={10}
-                      interval={0}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      content={<ChartTooltip type="dayOfWeek" />}
-                      cursor={{ fill: chartUI.cursor.fill }}
-                    />
-                    <Bar
-                      dataKey="orders"
-                      name="Rata-rata Pesanan"
-                      radius={[4, 4, 0, 0]}
-                      animationDuration={500}
+                <AnimatePresence mode="wait">
+                  {ordersDayData.length === 0 ? (
+                    <motion.div
+                      key="empty-ops"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
                     >
-                      {ordersDayData.map((entry, index) => {
-                        const maxOrders = Math.max(
-                          ...ordersDayData.map((d) => d.orders)
-                        );
-                        const isBestDay =
-                          entry.orders === maxOrders && entry.orders > 0;
-                        return (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              isBestDay
-                                ? chartColors.primary
-                                : chartColors.secondary
-                            }
-                            className={isBestDay ? "animate-pulse" : ""}
+                      <ChartEmptyState
+                        title="Data Operasional Kosong"
+                        message="Upload data untuk melihat pola pesanan harian."
+                        action={{
+                          label: "Upload Data",
+                          onClick: () => navigate("/upload"),
+                        }}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="ops-chart"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full w-full"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={ordersDayData}
+                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                            opacity={0.1}
                           />
-                        );
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                          <XAxis
+                            dataKey="displayMonth"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10 }}
+                            dy={10}
+                            interval={0}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10 }}
+                          />
+                          <Tooltip
+                            content={<ChartTooltip type="dayOfWeek" />}
+                            cursor={{ fill: chartUI.cursor.fill }}
+                          />
+                          <Bar
+                            dataKey="orders"
+                            name="Rata-rata Pesanan"
+                            radius={[4, 4, 0, 0]}
+                            animationDuration={500}
+                            animationEasing="ease-out"
+                          >
+                            {ordersDayData.map((entry, index) => {
+                              const maxOrders = Math.max(
+                                ...ordersDayData.map((d) => d.orders)
+                              );
+                              const isBestDay =
+                                entry.orders === maxOrders && entry.orders > 0;
+                              return (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={
+                                    isBestDay
+                                      ? chartColors.primary
+                                      : chartColors.secondary
+                                  }
+                                  className={isBestDay ? "animate-pulse" : ""}
+                                />
+                              );
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </CardContent>
             </Card>
           )}

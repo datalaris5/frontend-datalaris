@@ -11,6 +11,17 @@
 > - [API_CATALOG.md](./API_CATALOG.md) - Daftar endpoint
 > - [BACKEND_ISSUES.md](./BACKEND_ISSUES.md) - Bug tracker
 
+> [!CAUTION] > **ATURAN WAJIB untuk AI:**
+>
+> **DILARANG** menjalankan terminal command dengan `run_command` langsung + `WaitMsBeforeAsync` panjang (>500ms).
+>
+> **WAJIB** gunakan **Metode 2-Step**:
+>
+> 1. `run_command` dengan `WaitMsBeforeAsync: 500` (buka terminal saja)
+> 2. `send_command_input` dengan `Input: "command\n"` (kirim command + Enter)
+>
+> Pelanggaran akan menyebabkan terminal hang dan command tidak pernah selesai!
+
 ---
 
 ## ✅ Command yang Aman Auto-Run
