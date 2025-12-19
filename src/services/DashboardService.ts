@@ -41,4 +41,12 @@ export const DashboardService = {
   // Total Orders per Week (NEW)
   totalPesananInWeek: (params: DashboardParams): Promise<AxiosResponse> =>
     apiClient.post("/admin/dashboard-tinjauan/total-pesanan/in-week", params),
+
+  // Year-over-Year Growth (FEAT-001 - Backend not yet implemented)
+  yoyGrowth: (params: {
+    store_id: number;
+    marketplace_id: number;
+    year: number;
+  }): Promise<AxiosResponse> =>
+    apiClient.post("/admin/dashboard-tinjauan/yoy-growth", params),
 };

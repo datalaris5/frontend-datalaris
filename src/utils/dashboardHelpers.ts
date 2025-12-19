@@ -72,10 +72,10 @@ export function buildPayload(
   dates: { fromDate: string; toDate: string }
 ) {
   return {
-    store_id: storeId,
+    store_id: Number(storeId),
     marketplace_id: marketplaceId,
-    date_from: dates.fromDate,
-    date_to: dates.toDate,
+    date_from: dates.fromDate, // Backend DTO expects date_from
+    date_to: dates.toDate, // Backend DTO expects date_to
   };
 }
 
@@ -102,10 +102,20 @@ export function getPreviousPeriodLabel(startDate: Date, endDate: Date): string {
 export function extractMetricData(res: any): MetricData {
   const data = res?.data?.data || {};
 
+  const current = Number(data.total || 0);
+  const percent = Number(data.percent || 0);
+
+  // Fix: Default ke 0 jika field tidak ada (Missing API treated as 0 value)
+  // User Request: "Biarkan seakan ada API, tuliskan 0 saja"
+  const previous = Number(data.previous_total || 0);
+
+  // REVERTED: Reverse Calculation dihapus atas request user.
+  // Biarkan kosong jika API belum siap.
+
   return {
-    current: Number(data.total || 0),
-    previous: Number(data.previous_total || 0),
-    percent: Number(data.percent || 0),
+    current,
+    previous,
+    percent,
     trend: data.trend || "Equal",
     sparkline: data.sparkline || [],
   };
@@ -119,7 +129,8 @@ export function extractMetricData(res: any): MetricData {
  * @returns Merged sparkline array
  */
 export function mergeSparklines(
-  sparklineArrays: SparklineItem[][]
+  sparklineArrays: SparklineItem[][],
+  type: "sum" | "average" = "sum"
 ): SparklineItem[] {
   // Flatten semua arrays jadi 1 array
   const flat = sparklineArrays.flat();
@@ -129,11 +140,20 @@ export function mergeSparklines(
   // Group by tanggal
   const grouped = groupBy(flat, "tanggal");
 
-  // Sum totals untuk setiap tanggal
-  return Object.entries(grouped).map(([tanggal, items]) => ({
-    tanggal,
-    total: sumBy(items, (item) => Number(item.total || 0)),
-  }));
+  // Sum/Avg totals untuk setiap tanggal & Sort by date
+  return Object.entries(grouped)
+    .map(([tanggal, items]) => {
+      const sum = sumBy(items, (item) => Number(item.total || 0));
+      const value = type === "average" ? sum / items.length : sum;
+
+      return {
+        tanggal,
+        total: value,
+      };
+    })
+    .sort(
+      (a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime()
+    );
 }
 
 /**
@@ -194,11 +214,19 @@ export function aggregateMetrics(results: any[]) {
       current: totalVisitors > 0 ? (totalOrders / totalVisitors) * 100 : 0,
       previous: prevVisitors > 0 ? (prevOrders / prevVisitors) * 100 : 0,
       percent: 0, // Multi-store tidak ada percent comparison
+      sparkline: mergeSparklines(
+        results.map((r) => r.cr?.sparkline || []),
+        "average"
+      ),
     },
     bs: {
       current: totalOrders > 0 ? totalSales / totalOrders : 0,
       previous: prevOrders > 0 ? prevSales / prevOrders : 0,
       percent: 0, // Multi-store tidak ada percent comparison
+      sparkline: mergeSparklines(
+        results.map((r) => r.bs?.sparkline || []),
+        "average"
+      ),
     },
   };
 }

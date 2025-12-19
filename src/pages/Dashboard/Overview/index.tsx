@@ -19,7 +19,7 @@
  * 5. Multi-store aggregation via hooks
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -52,10 +52,23 @@ import ChartTooltip from "@/components/common/ChartTooltip";
 import { aggregateByQuarter, formatAxisValue } from "@/utils/chartUtils";
 import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
 import TabToggle from "@/components/ui/TabToggle";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // React Query hooks
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useOverviewChartData } from "@/hooks/useOverviewChartData";
+import {
+  useEnhancedTrendChart,
+  indicatorLabels,
+  indicatorFormats,
+  type TrendIndicator,
+} from "@/hooks/useEnhancedTrendChart";
 
 // Skeleton components
 import MetricCardSkeleton from "@/components/dashboard/MetricCardSkeleton";
@@ -81,8 +94,17 @@ import {
   chartContentVariants,
 } from "@/config/animationConfig";
 import { useOperationalChartData } from "@/hooks/useOperationalChartData";
+import { YoYGrowthChart } from "@/components/dashboard/YoYGrowthChart";
+import {
+  aggregateData,
+  getAutoGranularity,
+  getAvailableGranularities,
+  granularityLabels,
+  type TimeGranularity,
+  type AggregatedDataPoint,
+} from "@/utils/timeAggregation";
 
-// Chart data key type
+// Chart data key type (legacy, akan dihapus setelah full migration)
 type ChartDataKey = "sales" | "orders" | "basketSize";
 
 // === MAIN COMPONENT ===
@@ -106,7 +128,16 @@ const DashboardOverview: React.FC = () => {
     error: chartError,
   } = useOverviewChartData();
 
-  // Chart state
+  // Enhanced Trend Chart hook (multi-indicator sparklines)
+  const { data: trendData, isLoading: trendLoading } = useEnhancedTrendChart();
+
+  // Chart state - Enhanced
+  const [selectedIndicator, setSelectedIndicator] =
+    useState<TrendIndicator>("sales");
+  const [selectedGranularity, setSelectedGranularity] =
+    useState<TimeGranularity>("monthly");
+
+  // Legacy chart state (untuk backward compatibility)
   const [salesData, setSalesData] = useState<SalesDataPoint[]>([]);
   const [salesViewMode, setSalesViewMode] = useState<"monthly" | "quarterly">(
     "monthly"
@@ -118,6 +149,68 @@ const DashboardOverview: React.FC = () => {
 
   // New Hook: Operational Chart Data
   const { data: ordersDayData = [] } = useOperationalChartData();
+
+  // Helper: Cek apakah chart data kosong (semua value = 0)
+  const isSalesDataEmpty = useMemo(() => {
+    if (salesData.length === 0) return true;
+    return salesData.every((d) => d.sales === 0 && d.orders === 0);
+  }, [salesData]);
+
+  const isOrdersDayDataEmpty = useMemo(() => {
+    if (ordersDayData.length === 0) return true;
+    return ordersDayData.every((d) => d.orders === 0);
+  }, [ordersDayData]);
+
+  // Enhanced: Get aggregated trend data berdasarkan selected indicator dan granularity
+  const aggregatedTrendData = useMemo((): AggregatedDataPoint[] => {
+    if (!trendData) return [];
+    const rawData = trendData[selectedIndicator] || [];
+
+    // Determine aggregation type: "average" for rates/sizes, "sum" for totals
+    const aggType = ["conversionRate", "basketSize"].includes(selectedIndicator)
+      ? "average"
+      : "sum";
+
+    // Fix: Pass start and end date for zero-filling continuous time series, and aggregation type
+    return aggregateData(
+      rawData,
+      selectedGranularity,
+      dateRange.startDate || new Date(),
+      dateRange.endDate || new Date(),
+      aggType
+    );
+  }, [trendData, selectedIndicator, selectedGranularity, dateRange]);
+
+  // Enhanced: Check if trend data is empty (all zeros)
+  const isTrendDataEmpty = useMemo(() => {
+    if (trendLoading || !trendData) return true;
+    const rawData = trendData[selectedIndicator] || [];
+    if (rawData.length === 0) return true;
+    return rawData.every((d) => d.total === 0);
+  }, [trendLoading, trendData, selectedIndicator]);
+
+  // Enhanced: Get available granularity options berdasarkan date range
+  const availableGranularities = useMemo((): TimeGranularity[] => {
+    if (!dateRange?.startDate || !dateRange?.endDate) return ["monthly"];
+    return getAvailableGranularities(
+      new Date(dateRange.startDate),
+      new Date(dateRange.endDate)
+    );
+  }, [dateRange]);
+
+  // Enhanced: Auto-detect granularity saat date range berubah
+  useEffect(() => {
+    if (dateRange?.startDate && dateRange?.endDate) {
+      const autoGranularity = getAutoGranularity(
+        new Date(dateRange.startDate),
+        new Date(dateRange.endDate)
+      );
+      // Hanya auto-set jika granularity sekarang tidak available
+      if (!availableGranularities.includes(selectedGranularity)) {
+        setSelectedGranularity(autoGranularity);
+      }
+    }
+  }, [dateRange, availableGranularities, selectedGranularity]);
 
   // Metrics state
   const [metrics, setMetrics] = useState<DashboardMetric[]>([
@@ -194,32 +287,17 @@ const DashboardOverview: React.FC = () => {
   useEffect(() => {
     if (!metricsData) return;
 
-    // Helper: Calculate previous value from current and percent if API doesn't provide it
-    const calculatePreviousValue = (
-      current: number,
-      percent: number,
-      apiPrevious?: number
-    ) => {
-      if (apiPrevious !== undefined) return apiPrevious;
-      if (percent === 0) return undefined;
-      return current / (1 + percent / 100);
-    };
+    // Helper removed: Logic dipindah ke dashboardHelpers.ts (Zero Placeholder Strategy)
 
     setMetrics((prev) => {
       const newMetrics = [...prev];
 
       // Update dari metricsData (React Query result)
       if (metricsData.sales) {
-        const calculatedPrevious = calculatePreviousValue(
-          metricsData.sales.current,
-          metricsData.sales.percent || 0,
-          metricsData.sales.previous
-        );
-
         newMetrics[0] = {
           ...newMetrics[0],
           value: metricsData.sales.current,
-          previousValue: calculatedPrevious,
+          previousValue: metricsData.sales.previous,
           trend: `${metricsData.sales.percent?.toFixed(1) || 0}%`,
           trendUp: (metricsData.sales.percent || 0) >= 0,
           data: metricsData.sales.sparkline?.map((d) => Number(d.total)) || [
@@ -233,11 +311,7 @@ const DashboardOverview: React.FC = () => {
         newMetrics[1] = {
           ...newMetrics[1],
           value: metricsData.orders.current,
-          previousValue: calculatePreviousValue(
-            metricsData.orders.current,
-            metricsData.orders.percent || 0,
-            metricsData.orders.previous
-          ),
+          previousValue: metricsData.orders.previous,
           trend: `${metricsData.orders.percent?.toFixed(1) || 0}%`,
           trendUp: (metricsData.orders.percent || 0) >= 0,
           data: metricsData.orders.sparkline?.map((d) => Number(d.total)) || [
@@ -251,14 +325,13 @@ const DashboardOverview: React.FC = () => {
         newMetrics[2] = {
           ...newMetrics[2],
           value: metricsData.cr.current,
-          previousValue: calculatePreviousValue(
-            metricsData.cr.current,
-            metricsData.cr.percent || 0,
-            metricsData.cr.previous
-          ),
+          previousValue: metricsData.cr.previous,
           trend: `${metricsData.cr.percent?.toFixed(1) || 0}%`,
           trendUp: (metricsData.cr.percent || 0) >= 0,
-          data: [0, 0, 0, 0, 0, 0, 0],
+          // Fix: Map sparkline data correctly instead of hardcoded 0s
+          data: metricsData.cr.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
           isDummy: false,
         };
       }
@@ -267,14 +340,13 @@ const DashboardOverview: React.FC = () => {
         newMetrics[3] = {
           ...newMetrics[3],
           value: metricsData.bs.current,
-          previousValue: calculatePreviousValue(
-            metricsData.bs.current,
-            metricsData.bs.percent || 0,
-            metricsData.bs.previous
-          ),
+          previousValue: metricsData.bs.previous,
           trend: `${metricsData.bs.percent?.toFixed(1) || 0}%`,
           trendUp: (metricsData.bs.percent || 0) >= 0,
-          data: [0, 0, 0, 0, 0, 0, 0],
+          // Fix: Map sparkline data correctly
+          data: metricsData.bs.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
           isDummy: false,
         };
       }
@@ -283,11 +355,7 @@ const DashboardOverview: React.FC = () => {
         newMetrics[4] = {
           ...newMetrics[4],
           value: metricsData.visitors.current,
-          previousValue: calculatePreviousValue(
-            metricsData.visitors.current,
-            metricsData.visitors.percent || 0,
-            metricsData.visitors.previous
-          ),
+          previousValue: metricsData.visitors.previous,
           trend: `${metricsData.visitors.percent?.toFixed(1) || 0}%`,
           trendUp: (metricsData.visitors.percent || 0) >= 0,
           data: metricsData.visitors.sparkline?.map((d) => Number(d.total)) || [
@@ -322,14 +390,13 @@ const DashboardOverview: React.FC = () => {
 
   // Update chart state dari React Query hook data
   useEffect(() => {
-    if (!chartData || chartData.length === 0) {
+    // Jika chartData undefined (masih loading), jangan update state dulu
+    if (chartData === undefined) {
       return;
     }
 
-    // Set raw monthly data
+    // Set data (bisa kosong atau berisi) - penting untuk Empty State!
     setMonthlyChartData(chartData);
-
-    // Set sales data (monthly mode by default)
     setSalesData(chartData);
   }, [chartData]);
 
@@ -410,13 +477,12 @@ const DashboardOverview: React.FC = () => {
             ))}
       </motion.div>
 
-      {/* Charts Area */}
-      {/* Charts Area */}
+      {/* Charts Area - Left/Right Split Layout */}
       <motion.div
-        className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4"
+        className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0"
         variants={fadeInUpVariants}
       >
-        {/* Main Chart - Analisa Tren */}
+        {/* LEFT: Analisa Tren (2/3 width, full height) */}
         <div className="lg:col-span-2 h-full min-h-0">
           {chartLoading ? (
             <ChartSkeleton />
@@ -429,40 +495,60 @@ const DashboardOverview: React.FC = () => {
                       Analisa Tren
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {activeChartTab === "sales" && "Tren total penjualan"}
-                      {activeChartTab === "orders" && "Tren jumlah pesanan"}
-                      {activeChartTab === "basketSize" &&
+                      {selectedIndicator === "sales" && "Tren total penjualan"}
+                      {selectedIndicator === "orders" && "Tren jumlah pesanan"}
+                      {selectedIndicator === "visitors" &&
+                        "Tren total pengunjung"}
+                      {selectedIndicator === "conversionRate" &&
+                        "Tren conversion rate"}
+                      {selectedIndicator === "basketSize" &&
                         "Tren rata-rata nilai keranjang"}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Data Tabs */}
-                    <TabToggle
-                      items={[
-                        { value: "sales", label: "Penjualan" },
-                        { value: "orders", label: "Pesanan" },
-                        { value: "basketSize", label: "Basket Size" },
-                      ]}
-                      activeValue={activeChartTab}
-                      onChange={setActiveChartTab}
-                      variant="primary"
-                    />
-                    {/* Period Toggle */}
-                    <TabToggle
-                      items={[
-                        { value: "monthly", label: "Bulanan" },
-                        { value: "quarterly", label: "Kuartal" },
-                      ]}
-                      activeValue={salesViewMode}
-                      onChange={setSalesViewMode}
-                      variant="secondary"
-                    />
+                    {/* Indicator Dropdown */}
+                    <Select
+                      value={selectedIndicator}
+                      onValueChange={(value) =>
+                        setSelectedIndicator(value as TrendIndicator)
+                      }
+                    >
+                      <SelectTrigger className="w-[180px] bg-background/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sales">Penjualan</SelectItem>
+                        <SelectItem value="orders">Pesanan</SelectItem>
+                        <SelectItem value="visitors">Pengunjung</SelectItem>
+                        <SelectItem value="conversionRate">
+                          Conversion Rate
+                        </SelectItem>
+                        <SelectItem value="basketSize">Basket Size</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Granularity Toggle */}
+                    <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50">
+                      {availableGranularities.map((gran) => (
+                        <button
+                          key={gran}
+                          onClick={() => setSelectedGranularity(gran)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            selectedGranularity === gran
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                          }`}
+                        >
+                          {granularityLabels[gran]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
                 <AnimatePresence mode="wait">
-                  {salesData.length === 0 ? (
+                  {trendLoading || isTrendDataEmpty ? (
                     <motion.div
                       key="empty"
                       variants={chartContentVariants}
@@ -471,18 +557,26 @@ const DashboardOverview: React.FC = () => {
                       exit="exit"
                       className="h-full"
                     >
-                      <ChartEmptyState
-                        title="Data Belum Tersedia"
-                        message="Upload data penjualan untuk melihat analisa tren."
-                        action={{
-                          label: "Upload Data",
-                          onClick: () => navigate("/upload"),
-                        }}
-                      />
+                      {trendLoading ? (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="text-sm text-muted-foreground">
+                            Memuat data...
+                          </div>
+                        </div>
+                      ) : (
+                        <ChartEmptyState
+                          title="Data Belum Tersedia"
+                          message="Upload data untuk melihat analisa tren."
+                          action={{
+                            label: "Upload Data",
+                            onClick: () => navigate("/upload"),
+                          }}
+                        />
+                      )}
                     </motion.div>
                   ) : (
                     <motion.div
-                      key={activeChartTab}
+                      key={`${selectedIndicator}-${selectedGranularity}`}
                       variants={chartContentVariants}
                       initial="hidden"
                       animate="visible"
@@ -491,7 +585,7 @@ const DashboardOverview: React.FC = () => {
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
-                          data={salesData}
+                          data={aggregatedTrendData}
                           margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
                         >
                           <defs>
@@ -522,7 +616,7 @@ const DashboardOverview: React.FC = () => {
                             opacity={0.1}
                           />
                           <XAxis
-                            dataKey="displayMonth"
+                            dataKey="key"
                             axisLine={false}
                             tickLine={false}
                             tick={{
@@ -532,7 +626,13 @@ const DashboardOverview: React.FC = () => {
                             }}
                             tickMargin={10}
                             dy={10}
-                            interval={0}
+                            interval={
+                              ["monthly", "quarterly"].includes(
+                                selectedGranularity
+                              )
+                                ? 0
+                                : "preserveStartEnd"
+                            }
                           />
                           <YAxis
                             axisLine={false}
@@ -549,17 +649,11 @@ const DashboardOverview: React.FC = () => {
                             content={<ChartTooltip type="auto" />}
                             cursor={{ stroke: chartUI.cursor.stroke }}
                           />
-                          {/* Dynamic Area based on activeChartTab */}
+                          {/* Dynamic Area based on selectedIndicator */}
                           <Area
                             type="monotone"
-                            dataKey={activeChartTab}
-                            name={
-                              activeChartTab === "sales"
-                                ? "Total Penjualan"
-                                : activeChartTab === "orders"
-                                ? "Total Pesanan"
-                                : "Basket Size"
-                            }
+                            dataKey="value"
+                            name={indicatorLabels[selectedIndicator]}
                             stroke={chartColors.primary}
                             fill="url(#colorSales)"
                             strokeWidth={2.5}
@@ -618,137 +712,146 @@ const DashboardOverview: React.FC = () => {
           )}
         </div>
 
-        {/* Side Chart - Analisa Operasional */}
-        <div className="h-full min-h-0">
-          {chartLoading ? (
-            <ChartSkeleton />
-          ) : (
-            <Card className="glass-card h-full flex flex-col">
-              <CardHeader className="flex-none pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-bold">
-                      Analisa Operasional
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Rata-rata pesanan per hari
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {ordersDayData.length > 0 &&
-                      (() => {
-                        const bestDay = ordersDayData.reduce((max, day) =>
-                          day.orders > max.orders ? day : max
-                        );
-                        const highlightTheme = semanticStatusThemes.highlight;
-                        return bestDay.orders > 0 ? (
-                          <div
-                            className={`flex items-center gap-2 px-3 py-1.5 ${highlightTheme.bg} border ${highlightTheme.border} rounded-full`}
-                          >
-                            <Trophy
-                              className={`w-4 h-4 ${highlightTheme.iconText}`}
-                            />
-                            <span
-                              className={`text-xs font-semibold ${highlightTheme.text} dark:${highlightTheme.textDark}`}
+        {/* RIGHT: Stacked Charts (1/3 width) */}
+        <div className="flex flex-col gap-4 h-full min-h-0">
+          {/* YoY Growth Chart (atas) */}
+          <div className="flex-1 min-h-0">
+            <YoYGrowthChart />
+          </div>
+
+          {/* Analisa Operasional (bawah) */}
+          <div className="flex-1 min-h-0">
+            {chartLoading ? (
+              <ChartSkeleton />
+            ) : (
+              <Card className="glass-card h-full flex flex-col">
+                <CardHeader className="flex-none pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base font-bold">
+                        Analisa Operasional
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Rata-rata pesanan per hari
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {ordersDayData.length > 0 &&
+                        (() => {
+                          const bestDay = ordersDayData.reduce((max, day) =>
+                            day.orders > max.orders ? day : max
+                          );
+                          const highlightTheme = semanticStatusThemes.highlight;
+                          return bestDay.orders > 0 ? (
+                            <div
+                              className={`flex items-center gap-2 px-3 py-1.5 ${highlightTheme.bg} border ${highlightTheme.border} rounded-full`}
                             >
-                              Best: {bestDay.full || bestDay.displayMonth}
-                            </span>
-                          </div>
-                        ) : null;
-                      })()}
+                              <Trophy
+                                className={`w-4 h-4 ${highlightTheme.iconText}`}
+                              />
+                              <span
+                                className={`text-xs font-semibold ${highlightTheme.text} dark:${highlightTheme.textDark}`}
+                              >
+                                Best: {bestDay.full || bestDay.displayMonth}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-                <AnimatePresence mode="wait">
-                  {ordersDayData.length === 0 ? (
-                    <motion.div
-                      key="empty-ops"
-                      variants={chartContentVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="h-full"
-                    >
-                      <ChartEmptyState
-                        title="Data Operasional Kosong"
-                        message="Upload data untuk melihat pola pesanan harian."
-                        action={{
-                          label: "Upload Data",
-                          onClick: () => navigate("/upload"),
-                        }}
-                      />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="ops-chart"
-                      variants={chartContentVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="h-full w-full"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={ordersDayData}
-                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                            opacity={0.1}
-                          />
-                          <XAxis
-                            dataKey="displayMonth"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 10 }}
-                            dy={10}
-                            interval={0}
-                          />
-                          <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 10 }}
-                          />
-                          <Tooltip
-                            content={<ChartTooltip type="dayOfWeek" />}
-                            cursor={{ fill: chartUI.cursor.fill }}
-                          />
-                          <Bar
-                            dataKey="orders"
-                            name="Rata-rata Pesanan"
-                            radius={[4, 4, 0, 0]}
-                            animationDuration={500}
-                            animationEasing="ease-out"
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+                  <AnimatePresence mode="wait">
+                    {isOrdersDayDataEmpty ? (
+                      <motion.div
+                        key="empty-ops"
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full"
+                      >
+                        <ChartEmptyState
+                          title="Data Operasional Kosong"
+                          message="Upload data untuk melihat pola pesanan harian."
+                          action={{
+                            label: "Upload Data",
+                            onClick: () => navigate("/upload"),
+                          }}
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="ops-chart"
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full w-full"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={ordersDayData}
+                            margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
                           >
-                            {ordersDayData.map((entry, index) => {
-                              const maxOrders = Math.max(
-                                ...ordersDayData.map((d) => d.orders)
-                              );
-                              const isBestDay =
-                                entry.orders === maxOrders && entry.orders > 0;
-                              return (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={
-                                    isBestDay
-                                      ? chartColors.primary
-                                      : chartColors.secondary
-                                  }
-                                  className={isBestDay ? "animate-pulse" : ""}
-                                />
-                              );
-                            })}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </CardContent>
-            </Card>
-          )}
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                              opacity={0.1}
+                            />
+                            <XAxis
+                              dataKey="displayMonth"
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 10 }}
+                              dy={10}
+                              interval={0}
+                            />
+                            <YAxis
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 10 }}
+                            />
+                            <Tooltip
+                              content={<ChartTooltip type="dayOfWeek" />}
+                              cursor={{ fill: chartUI.cursor.fill }}
+                            />
+                            <Bar
+                              dataKey="orders"
+                              name="Rata-rata Pesanan"
+                              radius={[4, 4, 0, 0]}
+                              animationDuration={500}
+                              animationEasing="ease-out"
+                            >
+                              {ordersDayData.map((entry, index) => {
+                                const maxOrders = Math.max(
+                                  ...ordersDayData.map((d) => d.orders)
+                                );
+                                const isBestDay =
+                                  entry.orders === maxOrders &&
+                                  entry.orders > 0;
+                                return (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={
+                                      isBestDay
+                                        ? chartColors.primary
+                                        : chartColors.secondary
+                                    }
+                                    className={isBestDay ? "animate-pulse" : ""}
+                                  />
+                                );
+                              })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </motion.div>
     </motion.div>

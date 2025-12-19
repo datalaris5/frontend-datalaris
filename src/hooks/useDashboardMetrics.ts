@@ -69,10 +69,19 @@ export function useDashboardMetrics() {
       const targetStores = getTargetStores(store, stores);
 
       if (targetStores.length === 0) {
+        // Return empty data structure to prevent downstream errors
+        console.log("DEBUG: No target stores found");
         return null;
       }
 
       const dates = formatDateRange(dateRange);
+
+      console.log(
+        "DEBUG: Fetching metrics for stores:",
+        targetStores.length,
+        "dates:",
+        dates
+      );
 
       // Fetch all stores in parallel
       const results = await Promise.all(
@@ -80,6 +89,8 @@ export function useDashboardMetrics() {
           fetchStoreMetrics(s.id!, s.marketplace_id || 1, dates)
         )
       );
+
+      console.log("DEBUG: Metrics fetch results:", results);
 
       // Single store: return as is
       if (results.length === 1) {

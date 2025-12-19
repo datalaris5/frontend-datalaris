@@ -39,27 +39,29 @@ const ChartEmptyState: React.FC<ChartEmptyStateProps> = ({
 }) => {
   return (
     <motion.div
-      className="flex flex-col items-center justify-center h-full w-full py-12 px-6 text-center"
+      className="flex flex-col items-center justify-center h-full w-full py-6 px-4 text-center"
       variants={fadeInVariants}
       initial="hidden"
       animate="visible"
     >
       {/* Icon Container with Glass Effect */}
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         {/* Glow Background */}
-        <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl scale-150" />
+        <div className="absolute inset-0 bg-primary/10 rounded-full blur-xl scale-150" />
         {/* Icon Circle */}
-        <div className="relative p-4 rounded-full bg-muted/50 border border-border/50">
+        <div className="relative p-3 rounded-full bg-muted/50 border border-border/50">
           <Icon
-            className="w-10 h-10 text-muted-foreground/50"
+            className="w-8 h-8 text-muted-foreground/50"
             strokeWidth={1.5}
           />
         </div>
       </div>
 
       {/* Text Content */}
-      <h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
-      <p className="text-sm text-muted-foreground max-w-xs">{message}</p>
+      <h3 className="text-sm font-semibold text-foreground mb-1 whitespace-nowrap">
+        {title}
+      </h3>
+      <p className="text-xs text-muted-foreground max-w-md">{message}</p>
 
       {/* Optional Action Button */}
       {action && (
