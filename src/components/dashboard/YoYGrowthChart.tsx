@@ -11,8 +11,7 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Calendar, Upload } from "lucide-react";
+import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -24,12 +23,17 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useYoYGrowth, YoYMetric } from "@/hooks/useYoYGrowth";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-
-// Warna untuk growth
-const POSITIVE_COLOR = "#10b981"; // Emerald
-const NEGATIVE_COLOR = "#ef4444"; // Red
+import ChartEmptyState from "@/components/dashboard/ChartEmptyState";
+import ChartSkeleton from "@/components/dashboard/ChartSkeleton";
+import {
+  chartLayout,
+  chartTypography,
+  chartHeaderIcons,
+  chartContent,
+  chartAnimation,
+  chartGrowthColors,
+  chartUI,
+} from "@/config/chartTheme";
 
 // Custom Tooltip
 const CustomTooltip = ({ active, payload }: any) => {
@@ -39,12 +43,16 @@ const CustomTooltip = ({ active, payload }: any) => {
   const isPositive = data.growthPercent >= 0;
 
   return (
-    <div className="glass-card p-3 rounded-lg shadow-lg border border-white/10">
-      <p className="font-semibold text-sm mb-2">{data.month}</p>
-      <div className="space-y-1 text-xs">
-        <div className="flex justify-between gap-4">
-          <span className="text-muted-foreground">Tahun Ini:</span>
-          <span className="font-medium">
+    <div className="glass-tooltip p-2.5 min-w-[150px]">
+      <div className="mb-2 pb-2 border-b border-border/50">
+        <p className="text-xs font-bold text-foreground">{data.month}</p>
+      </div>
+
+      <div className="space-y-2">
+        {/* Tahun Ini */}
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs text-muted-foreground">Tahun Ini</span>
+          <span className="text-sm font-bold text-primary tabular-nums">
             {new Intl.NumberFormat("id-ID", {
               style: "currency",
               currency: "IDR",
@@ -52,9 +60,11 @@ const CustomTooltip = ({ active, payload }: any) => {
             }).format(data.currentValue)}
           </span>
         </div>
-        <div className="flex justify-between gap-4">
-          <span className="text-muted-foreground">Tahun Lalu:</span>
-          <span className="font-medium">
+
+        {/* Tahun Lalu */}
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs text-muted-foreground">Tahun Lalu</span>
+          <span className="text-xs font-medium text-foreground/80 tabular-nums">
             {new Intl.NumberFormat("id-ID", {
               style: "currency",
               currency: "IDR",
@@ -62,11 +72,17 @@ const CustomTooltip = ({ active, payload }: any) => {
             }).format(data.previousValue)}
           </span>
         </div>
-        <div className="flex justify-between gap-4 pt-1 border-t border-white/10">
-          <span className="text-muted-foreground">Pertumbuhan:</span>
+
+        {/* Pertumbuhan */}
+        <div className="flex items-center justify-between gap-4 pt-1 border-t border-white/5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Growth
+          </span>
           <span
-            className={`font-bold ${
-              isPositive ? "text-emerald-500" : "text-red-500"
+            className={`text-xs font-bold tabular-nums ${
+              isPositive
+                ? chartGrowthColors.positive.text
+                : chartGrowthColors.negative.text
             }`}
           >
             {isPositive ? "+" : ""}
@@ -79,65 +95,40 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function YoYGrowthChart() {
-  const { data, isLoading, error } = useYoYGrowth();
-  const navigate = useNavigate();
+  const { data, isLoading } = useYoYGrowth();
 
   // Loading state
   if (isLoading) {
-    return (
-      <Card className="glass-card h-full flex flex-col">
-        <CardHeader className="flex-none pb-3">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            Pertumbuhan Tahunan (YoY)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 min-h-0 flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">
-            Memuat data...
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <ChartSkeleton />;
   }
 
   // Empty state - API not implemented or no previous year data
   if (!data || !data.hasPreviousYearData) {
+    const previousYear = (data?.currentYear || new Date().getFullYear()) - 1;
     return (
       <Card className="glass-card h-full flex flex-col">
-        <CardHeader className="flex-none pb-3">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            Pertumbuhan Tahunan (YoY)
-          </CardTitle>
+        <CardHeader className="py-4 px-6 flex-none border-b border-black/5 dark:border-white/10">
+          <div className="flex flex-col gap-1">
+            <CardTitle
+              className={`${chartTypography.titleCompact} flex items-center gap-2`}
+            >
+              <TrendingUp className={chartHeaderIcons.compact} />
+              {chartContent.yoyGrowth.title}
+            </CardTitle>
+            <p className={chartTypography.subtitleCompact}>
+              {chartContent.yoyGrowth.getSubtitle(
+                data?.currentYear || new Date().getFullYear(),
+                previousYear
+              )}
+            </p>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 min-h-0 flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center p-6"
-          >
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <Calendar className="w-8 h-8 text-amber-500" />
-            </div>
-            <h3 className="font-semibold text-base mb-2">
-              Data Tahun Lalu Belum Tersedia
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-              Upload data tahun{" "}
-              {(data?.currentYear || new Date().getFullYear()) - 1} untuk
-              melihat perbandingan pertumbuhan dengan tahun ini.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/upload")}
-              className="gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Data
-            </Button>
-          </motion.div>
+          <ChartEmptyState
+            icon={Calendar}
+            title="Data YoY Belum Tersedia"
+            message={`Upload data tahun ${previousYear} untuk perbandingan.`}
+          />
         </CardContent>
       </Card>
     );
@@ -150,17 +141,27 @@ export function YoYGrowthChart() {
 
   return (
     <Card className="glass-card h-full flex flex-col">
-      <CardHeader className="flex-none pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            Pertumbuhan Tahunan (YoY)
-          </CardTitle>
+      <CardHeader className="py-4 px-6 flex-none border-b border-black/5 dark:border-white/10">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <CardTitle
+              className={`${chartTypography.titleCompact} flex items-center gap-2`}
+            >
+              <TrendingUp className={chartHeaderIcons.compact} />
+              {chartContent.yoyGrowth.title}
+            </CardTitle>
+            <p className={chartTypography.subtitleCompact}>
+              {chartContent.yoyGrowth.getSubtitle(
+                data.currentYear,
+                data.previousYear
+              )}
+            </p>
+          </div>
           <div
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold shrink-0 ${
               isOverallPositive
-                ? "bg-emerald-500/10 text-emerald-500"
-                : "bg-red-500/10 text-red-500"
+                ? `${chartGrowthColors.positive.bg} ${chartGrowthColors.positive.text}`
+                : `${chartGrowthColors.negative.bg} ${chartGrowthColors.negative.text}`
             }`}
           >
             {isOverallPositive ? (
@@ -172,16 +173,13 @@ export function YoYGrowthChart() {
             {overallGrowth.toFixed(1)}%
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {data.currentYear} vs {data.previousYear}
-        </p>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 pt-2 pb-4">
+      <CardContent className="flex-1 min-h-0 pt-2 pb-4 px-4">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
             layout="vertical"
-            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            margin={chartLayout.horizontal.margin}
           >
             <XAxis type="number" hide />
             <YAxis
@@ -189,21 +187,23 @@ export function YoYGrowthChart() {
               dataKey="month"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-              width={40}
+              tick={chartTypography.axisLabel}
+              width={chartLayout.horizontal.yAxisWidth}
             />
             <Tooltip content={<CustomTooltip />} cursor={false} />
             <ReferenceLine x={0} stroke="hsl(var(--border))" />
             <Bar
               dataKey="growthPercent"
-              radius={[0, 4, 4, 0]}
-              animationDuration={500}
+              radius={chartUI.barRadius.right}
+              animationDuration={chartAnimation.duration}
             >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={
-                    entry.growthPercent >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR
+                    entry.growthPercent >= 0
+                      ? chartGrowthColors.positive.fill
+                      : chartGrowthColors.negative.fill
                   }
                 />
               ))}

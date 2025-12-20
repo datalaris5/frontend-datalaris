@@ -459,13 +459,13 @@ Backend membutuhkannya untuk menentukan tabel mana yang akan di-query.
 
 #### Config Files yang Tersedia
 
-| File                        | Isi                                          | Contoh Penggunaan                      |
-| --------------------------- | -------------------------------------------- | -------------------------------------- |
-| `config/dashboardIcons.ts`  | Icon mapping, size, strokeWidth              | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH`   |
-| `config/themeConfig.ts`     | Semantic colors, status themes, trend styles | `trendBadgeStyles.up.className`        |
-| `config/chartTheme.ts`      | Chart colors, gradients, styles              | `chartColors.primary`                  |
-| `config/animationConfig.ts` | Centralized framer-motion variants           | `fadeInUpVariants`, `staggerContainer` |
-| `index.css`                 | Utility classes, animations                  | `.glass-card-premium`                  |
+| File                        | Isi                                                         | Contoh Penggunaan                                                       |
+| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `config/dashboardIcons.ts`  | Icon mapping, size, strokeWidth                             | `ICON_SIZES.sm`, `ICON_STROKE_WIDTH`                                    |
+| `config/themeConfig.ts`     | Semantic colors, status themes, trend styles                | `trendBadgeStyles.up.className`                                         |
+| `config/chartTheme.ts`      | Chart colors, gradients, styles, **layout**, **typography** | `chartColors.primary`, `chartLayout.large`, `chartTypography.axisLabel` |
+| `config/animationConfig.ts` | Centralized framer-motion variants                          | `fadeInUpVariants`, `staggerContainer`                                  |
+| `index.css`                 | Utility classes, animations                                 | `.glass-card-premium`                                                   |
 
 #### Contoh Benar vs Salah
 
@@ -536,6 +536,46 @@ import { chartColors, areaStyles, chartUI } from "@/config/chartTheme";
 // Grid
 <CartesianGrid strokeDasharray={chartUI.grid.strokeDasharray} />
 ```
+
+#### Chart Layout Presets (`chartLayout`)
+
+Gunakan preset layout yang sesuai dengan ukuran chart:
+
+| Preset       | Untuk Chart             | Margin       | Y-Axis Width | ContentPadding   |
+| ------------ | ----------------------- | ------------ | ------------ | ---------------- |
+| `large`      | Chart utama (2/3 width) | `20/20/0/30` | `45px`       | `pt-4 pb-6 px-6` |
+| `compact`    | Chart kecil/stacked     | `10/15/0/20` | `35px`       | `pt-4 pb-6 px-6` |
+| `horizontal` | Horizontal bar chart    | `5/30/20/5`  | `40px`       | `pt-2 pb-4 px-4` |
+
+```tsx
+import { chartLayout, chartTypography } from "@/config/chartTheme";
+
+// Untuk chart besar (Analisa Tren)
+<AreaChart margin={chartLayout.large.margin}>
+  <YAxis width={chartLayout.large.yAxisWidth} tick={chartTypography.axisLabel} />
+</AreaChart>
+
+// Untuk chart compact (Analisa Operasional)
+<BarChart margin={chartLayout.compact.margin}>
+  <YAxis width={chartLayout.compact.yAxisWidth} tick={chartTypography.axisLabel} />
+</BarChart>
+```
+
+#### Chart Typography (`chartTypography`)
+
+| Preset         | Untuk             | Contoh Class                                             |
+| -------------- | ----------------- | -------------------------------------------------------- |
+| `titleLarge`   | Title chart besar | `text-lg font-bold`                                      |
+| `titleCompact` | Title chart kecil | `text-base font-bold`                                    |
+| `subtitle`     | Subtitle chart    | `text-sm text-muted-foreground`                          |
+| `axisLabel`    | Label sumbu X/Y   | `{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }` |
+
+#### Chart Header Icons (`chartHeaderIcons`)
+
+| Preset    | Size  | Color          | Usage                                           |
+| --------- | ----- | -------------- | ----------------------------------------------- |
+| `large`   | `w-5` | `text-primary` | `<Icon className={chartHeaderIcons.large} />`   |
+| `compact` | `w-4` | `text-primary` | `<Icon className={chartHeaderIcons.compact} />` |
 
 ### Tailwind Color Variables (Design Tokens)
 
@@ -710,6 +750,55 @@ Semua URL redirect ke `/index.html` (sudah dikonfigurasi di platform files).
 - **Grid:** `strokeDasharray="3 3"` opacity rendah (0.05)
 - **Stroke:** `strokeWidth={2.5}`
 - **Skeleton:** Gunakan `<ChartSkeleton />` saat loading
+
+### Empty State (Chart)
+
+Gunakan `<ChartEmptyState />` dari `@/components/dashboard` saat data kosong.
+
+**Komponen:** `components/dashboard/ChartEmptyState.tsx`
+
+**Props:**
+
+| Prop      | Type         | Default                                        | Keterangan             |
+| --------- | ------------ | ---------------------------------------------- | ---------------------- |
+| `icon`    | `LucideIcon` | `BarChart3`                                    | Icon dari lucide-react |
+| `title`   | `string`     | "Data Belum Tersedia"                          | Judul pesan            |
+| `message` | `string`     | "Upload data untuk melihat visualisasi chart." | Deskripsi              |
+
+**Aturan UX Consistency (WAJIB):**
+
+| Aspek       | Pattern                       | Contoh                                   |
+| ----------- | ----------------------------- | ---------------------------------------- |
+| **Title**   | "Data [Nama] Belum Tersedia"  | "Data Tren Belum Tersedia"               |
+| **Message** | "Upload data untuk [fungsi]." | "Upload data untuk melihat grafik tren." |
+| **Icon**    | Sesuai konteks chart          | BarChart3, Calendar                      |
+
+**Contoh Penggunaan:**
+
+```tsx
+import { ChartEmptyState } from "@/components/dashboard";
+import { Calendar } from "lucide-react";
+
+// Default (menggunakan BarChart3 icon)
+<ChartEmptyState
+  title="Data Tren Belum Tersedia"
+  message="Upload data untuk melihat grafik tren."
+/>
+
+// Custom icon (untuk konteks waktu/kalender)
+<ChartEmptyState
+  icon={Calendar}
+  title="Data YoY Belum Tersedia"
+  message="Upload data tahun sebelumnya untuk perbandingan."
+/>
+```
+
+**Design Principles:**
+
+- ✅ **Horizontal Layout:** Icon kiri, teks kanan (compact)
+- ✅ **Muted Colors:** Icon `text-muted-foreground/50`, text `text-muted-foreground/70`
+- ✅ **No Button:** Tidak ada tombol (sudah ada Upload di header)
+- ✅ **Consistency:** Semua empty state menggunakan pattern yang sama
 
 ### Animations
 

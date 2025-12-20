@@ -214,7 +214,7 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
             "h-8 w-8 flex flex-col items-center justify-center text-sm rounded-md transition-all cursor-pointer relative font-medium ";
 
           if (isDisabled) {
-            cellClasses += "text-muted-foreground/30 cursor-not-allowed ";
+            cellClasses += "text-muted-foreground/50 cursor-not-allowed ";
           } else if (isStart || isEnd) {
             // Tanggal awal/akhir range - highlight orange
             cellClasses +=
@@ -222,10 +222,10 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
           } else if (inRange) {
             // Dalam range - background subtle
             cellClasses +=
-              "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary-foreground/90 rounded-none font-medium ";
+              "bg-primary/10 dark:bg-primary/20 text-primary rounded-none font-medium ";
           } else if (!isCurrentMonth) {
             // Di luar bulan aktif - subtle
-            cellClasses += "text-muted-foreground/30 ";
+            cellClasses += "text-muted-foreground/50 ";
           } else if (isDateToday) {
             // Hari ini - border highlight
             cellClasses +=
@@ -403,17 +403,14 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       <PopoverTrigger asChild>
         <Button
           id="date"
-          variant="filter"
+          variant="ghost" // Use ghost to avoid conflicting background/borders
           className={cn(
-            "w-auto h-10 px-3 justify-between group gap-3 min-w-[200px]",
-            isOpen && "ring-2 ring-primary/20 border-primary/50"
+            "w-auto h-10 px-3 justify-between group gap-3 min-w-[200px] glass-card border-white/10 text-foreground shadow-sm hover:bg-white/5 active:scale-[0.98] transition-all bg-background/20 backdrop-blur-md hover:text-foreground rounded-xl",
+            isOpen && "ring-2 ring-primary/20 border-primary/50 bg-white/10"
           )}
         >
           <div className="flex items-center gap-2.5 overflow-hidden text-left">
-            <CalendarIcon
-              size={16}
-              className="text-primary dark:text-primary-foreground"
-            />
+            <CalendarIcon size={16} className="text-primary" />
             <span className="text-sm font-semibold truncate text-foreground/90 leading-tight">
               {dateRange.label === "Custom" &&
               selectedRange?.from &&
@@ -437,7 +434,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       {/* Popover Content */}
       <PopoverContent
         align="end"
-        className="w-auto p-0 glass-card overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200"
+        className="w-auto p-0 glass-card border-white/10 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200 backdrop-blur-3xl shadow-2xl"
       >
         <div className="flex flex-col md:flex-row max-h-[80vh] overflow-y-auto">
           {/* Sidebar Preset */}
@@ -453,7 +450,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
                   className={cn(
                     "w-full text-left px-3 py-2 text-sm rounded-lg transition-all relative overflow-hidden",
                     tempLabel === preset.l
-                      ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground font-semibold shadow-sm"
+                      ? "bg-primary/10 text-primary dark:bg-primary/20 font-semibold shadow-sm"
                       : "text-foreground/80 hover:bg-background hover:text-foreground hover:shadow-sm"
                   )}
                 >

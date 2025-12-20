@@ -154,6 +154,8 @@ export interface OrdersDayDataPoint {
   dayName?: string;
   avgSales?: number;
   full?: string;
+  average?: number;
+  count?: number;
 }
 
 export interface StoreItem {

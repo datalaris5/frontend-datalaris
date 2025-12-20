@@ -41,6 +41,9 @@ import {
   UserPlus,
   Upload,
   Trophy,
+  TrendingUp,
+  BarChart3,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -50,15 +53,25 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import ChartTooltip from "@/components/common/ChartTooltip";
 import { aggregateByQuarter, formatAxisValue } from "@/utils/chartUtils";
-import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
+import {
+  chartColors,
+  chartUI,
+  chartGradients,
+  chartLayout,
+  chartTypography,
+  chartHeaderIcons,
+  chartContent,
+  chartAnimation,
+} from "@/config/chartTheme";
 import TabToggle from "@/components/ui/TabToggle";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  MetricSelector,
+  ChartSkeleton,
+  ChartEmptyState,
+  MetricCard,
+  InsightBanner,
+  MetricCardSkeleton,
+} from "@/components/dashboard";
 
 // React Query hooks
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
@@ -71,15 +84,7 @@ import {
 } from "@/hooks/useEnhancedTrendChart";
 
 // Skeleton components
-import MetricCardSkeleton from "@/components/dashboard/MetricCardSkeleton";
-import ChartSkeleton from "@/components/dashboard/ChartSkeleton";
 
-// Shared Components
-import {
-  MetricCard,
-  InsightBanner,
-  ChartEmptyState,
-} from "@/components/dashboard";
 import DateRangePicker from "@/components/common/DateRangePicker";
 import type {
   DashboardMetric,
@@ -148,7 +153,8 @@ const DashboardOverview: React.FC = () => {
   );
 
   // New Hook: Operational Chart Data
-  const { data: ordersDayData = [] } = useOperationalChartData();
+  const { data: ordersDayData = [], isLoading: operationalLoading } =
+    useOperationalChartData();
 
   // Helper: Cek apakah chart data kosong (semua value = 0)
   const isSalesDataEmpty = useMemo(() => {
@@ -224,7 +230,7 @@ const DashboardOverview: React.FC = () => {
       icon: Banknote,
       highlight: false, // Unified glass - no solid highlight
       isDummy: false,
-      color: "teal", // Primary KPI accent
+      color: "orange", // Primary KPI accent
     },
     {
       title: "Total Pesanan",
@@ -437,7 +443,7 @@ const DashboardOverview: React.FC = () => {
 
           <button
             onClick={() => navigate("/upload")}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
           >
             <Upload size={18} strokeWidth={2.5} />
             <span className="font-bold text-sm">Upload Data</span>
@@ -448,23 +454,19 @@ const DashboardOverview: React.FC = () => {
       {/* Quick Insight Banner */}
       {/* Quick Insight Banner */}
       <motion.div variants={fadeInUpVariants}>
-        <InsightBanner
-          metrics={metrics}
-          ordersDayData={ordersDayData}
-          loading={metricsLoading}
-        />
+        <InsightBanner metrics={metrics} loading={metricsLoading} />
       </motion.div>
 
       {/* Metrics Row */}
       {/* Metrics Row */}
       <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-none"
+        className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 flex-none"
         variants={fadeInUpVariants}
       >
         {metricsLoading
           ? // Skeleton loading state
             Array.from({ length: 6 }).map((_, index) => (
-              <MetricCardSkeleton key={index} highlight={index < 2} />
+              <MetricCardSkeleton key={index} />
             ))
           : // Actual metrics cards
             metrics.map((metric, index) => (
@@ -480,21 +482,27 @@ const DashboardOverview: React.FC = () => {
       {/* Charts Area - Left/Right Split Layout */}
       <motion.div
         className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0"
-        variants={fadeInUpVariants}
+        variants={staggerContainerVariants}
       >
         {/* LEFT: Analisa Tren (2/3 width, full height) */}
-        <div className="lg:col-span-2 h-full min-h-0">
+        <motion.div
+          className="lg:col-span-2 h-full min-h-0"
+          variants={fadeInUpVariants}
+        >
           {chartLoading ? (
             <ChartSkeleton />
           ) : (
-            <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
+            <Card className="glass-card rounded-2xl h-full flex flex-col">
               <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <CardTitle className="text-lg font-bold">
-                      Analisa Tren
+                    <CardTitle
+                      className={`${chartTypography.titleLarge} flex items-center gap-2`}
+                    >
+                      <TrendingUp className={chartHeaderIcons.large} />
+                      {chartContent.tren.title}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className={`${chartTypography.subtitle} mt-1`}>
                       {selectedIndicator === "sales" && "Tren total penjualan"}
                       {selectedIndicator === "orders" && "Tren jumlah pesanan"}
                       {selectedIndicator === "visitors" &&
@@ -507,46 +515,27 @@ const DashboardOverview: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     {/* Indicator Dropdown */}
-                    <Select
+                    {/* Indicator Dropdown */}
+                    <MetricSelector
                       value={selectedIndicator}
-                      onValueChange={(value) =>
-                        setSelectedIndicator(value as TrendIndicator)
-                      }
-                    >
-                      <SelectTrigger className="w-[180px] bg-background/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sales">Penjualan</SelectItem>
-                        <SelectItem value="orders">Pesanan</SelectItem>
-                        <SelectItem value="visitors">Pengunjung</SelectItem>
-                        <SelectItem value="conversionRate">
-                          Conversion Rate
-                        </SelectItem>
-                        <SelectItem value="basketSize">Basket Size</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(value) => setSelectedIndicator(value)}
+                    />
 
                     {/* Granularity Toggle */}
-                    <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50">
-                      {availableGranularities.map((gran) => (
-                        <button
-                          key={gran}
-                          onClick={() => setSelectedGranularity(gran)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            selectedGranularity === gran
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                          }`}
-                        >
-                          {granularityLabels[gran]}
-                        </button>
-                      ))}
-                    </div>
+                    {/* Granularity Toggle */}
+                    <TabToggle
+                      items={availableGranularities.map((gran) => ({
+                        value: gran,
+                        label: granularityLabels[gran],
+                      }))}
+                      activeValue={selectedGranularity}
+                      onChange={(value) => setSelectedGranularity(value as any)}
+                      size="sm"
+                    />
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+              <CardContent className="flex-1 min-h-0 pt-4 pb-6 px-6">
                 <AnimatePresence mode="wait">
                   {trendLoading || isTrendDataEmpty ? (
                     <motion.div
@@ -558,19 +547,16 @@ const DashboardOverview: React.FC = () => {
                       className="h-full"
                     >
                       {trendLoading ? (
-                        <div className="h-full flex items-center justify-center">
-                          <div className="text-sm text-muted-foreground">
-                            Memuat data...
-                          </div>
+                        <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <span className="text-xs font-medium">
+                            Memuat grafik...
+                          </span>
                         </div>
                       ) : (
                         <ChartEmptyState
-                          title="Data Belum Tersedia"
-                          message="Upload data untuk melihat analisa tren."
-                          action={{
-                            label: "Upload Data",
-                            onClick: () => navigate("/upload"),
-                          }}
+                          title="Data Tren Belum Tersedia"
+                          message="Upload data untuk melihat grafik tren."
                         />
                       )}
                     </motion.div>
@@ -586,7 +572,7 @@ const DashboardOverview: React.FC = () => {
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
                           data={aggregatedTrendData}
-                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                          margin={chartLayout.large.margin}
                         >
                           <defs>
                             <linearGradient
@@ -611,39 +597,33 @@ const DashboardOverview: React.FC = () => {
                             </linearGradient>
                           </defs>
                           <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                            opacity={0.1}
+                            strokeDasharray={
+                              chartUI.cartesianGrid.strokeDasharray
+                            }
+                            vertical={chartUI.cartesianGrid.vertical}
+                            opacity={chartUI.cartesianGrid.opacity}
                           />
                           <XAxis
                             dataKey="key"
                             axisLine={false}
                             tickLine={false}
-                            tick={{
-                              fontSize: 10,
-                              fill: "hsl(var(--muted-foreground))",
-                              fontWeight: 500,
-                            }}
+                            tick={chartTypography.axisLabel}
                             tickMargin={10}
                             dy={10}
                             interval={
-                              ["monthly", "quarterly"].includes(
-                                selectedGranularity
-                              )
-                                ? 0
-                                : "preserveStartEnd"
+                              // Smart interval: tampilkan semua jika sedikit, atau hitung interval agar ~10-12 label tampil
+                              aggregatedTrendData.length <= 12
+                                ? 0 // Tampilkan semua
+                                : Math.ceil(aggregatedTrendData.length / 10) - 1 // Tampilkan ~10 label
                             }
                           />
                           <YAxis
                             axisLine={false}
                             tickLine={false}
                             tickFormatter={formatAxisValue}
-                            tick={{
-                              fontSize: 10,
-                              fill: "hsl(var(--muted-foreground))",
-                              fontWeight: 500,
-                            }}
+                            tick={chartTypography.axisLabel}
                             tickMargin={8}
+                            width={chartLayout.large.yAxisWidth}
                           />
                           <Tooltip
                             content={<ChartTooltip type="auto" />}
@@ -658,17 +638,14 @@ const DashboardOverview: React.FC = () => {
                             fill="url(#colorSales)"
                             strokeWidth={2.5}
                             strokeLinecap="round"
-                            animationDuration={500}
-                            animationEasing="ease-out"
+                            animationDuration={chartAnimation.duration}
+                            animationEasing={chartAnimation.easing}
                             activeDot={{
-                              r: 6,
-                              fill: chartColors.primary,
-                              stroke: "#fff",
-                              strokeWidth: 3,
-                              style: {
-                                filter:
-                                  "drop-shadow(0 2px 4px rgba(249, 115, 22, 0.3))",
-                              },
+                              r: chartUI.activeDot.r,
+                              fill: chartUI.activeDot.fill,
+                              stroke: chartUI.activeDot.stroke,
+                              strokeWidth: chartUI.activeDot.strokeWidth,
+                              style: { filter: chartUI.activeDot.filter },
                             }}
                           />
                           {/* Hidden areas for tooltip data */}
@@ -710,59 +687,42 @@ const DashboardOverview: React.FC = () => {
               </CardContent>
             </Card>
           )}
-        </div>
+        </motion.div>
 
         {/* RIGHT: Stacked Charts (1/3 width) */}
-        <div className="flex flex-col gap-4 h-full min-h-0">
+        <motion.div
+          className="flex flex-col gap-4 h-full min-h-0"
+          variants={staggerContainerVariants}
+        >
           {/* YoY Growth Chart (atas) */}
-          <div className="flex-1 min-h-0">
+          <motion.div className="flex-1 min-h-0" variants={fadeInUpVariants}>
             <YoYGrowthChart />
-          </div>
+          </motion.div>
 
           {/* Analisa Operasional (bawah) */}
-          <div className="flex-1 min-h-0">
+          <motion.div className="flex-1 min-h-0" variants={fadeInUpVariants}>
             {chartLoading ? (
               <ChartSkeleton />
             ) : (
               <Card className="glass-card h-full flex flex-col">
-                <CardHeader className="flex-none pb-3">
+                <CardHeader className="py-4 px-6 flex-none border-b border-black/5 dark:border-white/10">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base font-bold">
-                        Analisa Operasional
+                    <div className="flex flex-col gap-1">
+                      <CardTitle
+                        className={`${chartTypography.titleCompact} flex items-center gap-2`}
+                      >
+                        <BarChart3 className={chartHeaderIcons.compact} />
+                        {chartContent.operasional.title}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Rata-rata pesanan per hari
+                      <p className={`${chartTypography.subtitleCompact}`}>
+                        {chartContent.operasional.subtitle}
                       </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {ordersDayData.length > 0 &&
-                        (() => {
-                          const bestDay = ordersDayData.reduce((max, day) =>
-                            day.orders > max.orders ? day : max
-                          );
-                          const highlightTheme = semanticStatusThemes.highlight;
-                          return bestDay.orders > 0 ? (
-                            <div
-                              className={`flex items-center gap-2 px-3 py-1.5 ${highlightTheme.bg} border ${highlightTheme.border} rounded-full`}
-                            >
-                              <Trophy
-                                className={`w-4 h-4 ${highlightTheme.iconText}`}
-                              />
-                              <span
-                                className={`text-xs font-semibold ${highlightTheme.text} dark:${highlightTheme.textDark}`}
-                              >
-                                Best: {bestDay.full || bestDay.displayMonth}
-                              </span>
-                            </div>
-                          ) : null;
-                        })()}
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+                <CardContent className="flex-1 min-h-0 pt-4 pb-6 px-6">
                   <AnimatePresence mode="wait">
-                    {isOrdersDayDataEmpty ? (
+                    {operationalLoading || isOrdersDayDataEmpty ? (
                       <motion.div
                         key="empty-ops"
                         variants={chartContentVariants}
@@ -771,14 +731,20 @@ const DashboardOverview: React.FC = () => {
                         exit="exit"
                         className="h-full"
                       >
-                        <ChartEmptyState
-                          title="Data Operasional Kosong"
-                          message="Upload data untuk melihat pola pesanan harian."
-                          action={{
-                            label: "Upload Data",
-                            onClick: () => navigate("/upload"),
-                          }}
-                        />
+                        {operationalLoading ? (
+                          <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            <span className="text-xs font-medium">
+                              Memuat grafik...
+                            </span>
+                          </div>
+                        ) : (
+                          <ChartEmptyState
+                            icon={BarChart3}
+                            title="Data Operasional Belum Tersedia"
+                            message="Upload data untuk melihat pola harian."
+                          />
+                        )}
                       </motion.div>
                     ) : (
                       <motion.div
@@ -792,25 +758,28 @@ const DashboardOverview: React.FC = () => {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={ordersDayData}
-                            margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                            margin={chartLayout.compact.margin}
                           >
                             <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                              opacity={0.1}
+                              strokeDasharray={
+                                chartUI.cartesianGrid.strokeDasharray
+                              }
+                              vertical={chartUI.cartesianGrid.vertical}
+                              opacity={chartUI.cartesianGrid.opacity}
                             />
                             <XAxis
-                              dataKey="displayMonth"
+                              dataKey="dayLabel"
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fontSize: 10 }}
+                              tick={chartTypography.axisLabel}
                               dy={10}
                               interval={0}
                             />
                             <YAxis
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fontSize: 10 }}
+                              tick={chartTypography.axisLabel}
+                              width={chartLayout.compact.yAxisWidth}
                             />
                             <Tooltip
                               content={<ChartTooltip type="dayOfWeek" />}
@@ -818,10 +787,10 @@ const DashboardOverview: React.FC = () => {
                             />
                             <Bar
                               dataKey="orders"
-                              name="Rata-rata Pesanan"
-                              radius={[4, 4, 0, 0]}
-                              animationDuration={500}
-                              animationEasing="ease-out"
+                              name="Total Pesanan"
+                              radius={chartUI.barRadius.top}
+                              animationDuration={chartAnimation.duration}
+                              animationEasing={chartAnimation.easing}
                             >
                               {ordersDayData.map((entry, index) => {
                                 const maxOrders = Math.max(
@@ -838,7 +807,6 @@ const DashboardOverview: React.FC = () => {
                                         ? chartColors.primary
                                         : chartColors.secondary
                                     }
-                                    className={isBestDay ? "animate-pulse" : ""}
                                   />
                                 );
                               })}
@@ -851,8 +819,8 @@ const DashboardOverview: React.FC = () => {
                 </CardContent>
               </Card>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </motion.div>
     </motion.div>
   );

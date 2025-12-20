@@ -60,7 +60,7 @@
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted-foreground: 215 20.2% 72%;
 
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
@@ -111,27 +111,27 @@
 
   /* iOS Glass Effect Utilities */
   .glass-card {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-3xl backdrop-saturate-150;
-    @apply border border-white/40 dark:border-white/10;
-    @apply shadow-xl shadow-black/5 dark:shadow-black/20;
+    @apply bg-white/50 dark:bg-gray-900/50 backdrop-blur-3xl backdrop-saturate-150;
+    @apply border border-black/10 dark:border-white/15;
+    @apply shadow-xl shadow-black/10 dark:shadow-black/30;
     @apply ring-1 ring-black/5 dark:ring-white/5;
     @apply rounded-2xl;
     @apply relative overflow-hidden;
   }
 
   .glass-card-strong {
-    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-3xl backdrop-saturate-150;
-    @apply border border-white/50 dark:border-white/15;
-    @apply shadow-2xl shadow-black/10 dark:shadow-black/30;
+    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-3xl backdrop-saturate-150;
+    @apply border border-black/10 dark:border-white/20;
+    @apply shadow-2xl shadow-black/20 dark:shadow-black/40;
     @apply ring-1 ring-white/20 dark:ring-white/10;
     @apply relative overflow-hidden;
   }
 
   /* Premium Glass Card - Enhanced dengan subtle effects */
   .glass-card-premium {
-    @apply bg-white/75 dark:bg-gray-900/75 backdrop-blur-3xl backdrop-saturate-200;
-    @apply border border-white/60 dark:border-white/15;
-    @apply shadow-2xl shadow-black/10 dark:shadow-black/30;
+    @apply bg-white/60 dark:bg-gray-900/60 backdrop-blur-3xl backdrop-saturate-200;
+    @apply border border-black/10 dark:border-white/20;
+    @apply shadow-2xl shadow-black/10 dark:shadow-black/35;
     @apply ring-1 ring-white/30 dark:ring-white/10;
     @apply rounded-2xl;
     @apply relative overflow-hidden;
@@ -226,7 +226,7 @@
 
   /* Glass Tooltip - Centralized for Chart Tooltips */
   .glass-tooltip {
-    @apply bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl;
+    @apply bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl;
     @apply border border-black/5 dark:border-white/10;
     @apply shadow-xl shadow-black/10 dark:shadow-black/30;
     @apply rounded-2xl p-4;
@@ -292,64 +292,28 @@
     @apply bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400;
   }
 
-  /* Mesh Gradient Background - More Visible & Soft */
+  /* Authentic iOS Glassmorphism Background */
+  /* Solid base with very subtle gradient overlay - true to iOS design */
   .mesh-gradient {
-    background-color: transparent;
-    background-image: radial-gradient(
-        at 40% 20%,
-        hsla(28, 100%, 74%, 0.35) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 80% 0%, hsla(189, 100%, 56%, 0.3) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, hsla(355, 100%, 93%, 0.3) 0px, transparent 50%),
-      radial-gradient(
-        at 80% 50%,
-        hsla(150, 100%, 76%, 0.25) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 0% 100%,
-        hsla(22, 100%, 77%, 0.35) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 80% 100%,
-        hsla(242, 100%, 70%, 0.3) 0px,
-        transparent 50%
-      );
+    /* Light mode: Off-white base with very faint warm tint */
+    background-color: hsl(40, 20%, 98%);
+    background-image: linear-gradient(
+      135deg,
+      hsla(210, 30%, 95%, 0.5) 0%,
+      hsla(30, 20%, 97%, 0.3) 50%,
+      hsla(210, 25%, 96%, 0.4) 100%
+    );
   }
 
   .dark .mesh-gradient {
-    background-image: radial-gradient(
-        at 40% 20%,
-        hsla(28, 100%, 50%, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 80% 0%,
-        hsla(189, 100%, 40%, 0.12) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 0% 50%,
-        hsla(355, 100%, 50%, 0.12) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 80% 50%,
-        hsla(340, 100%, 50%, 0.12) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 0% 100%,
-        hsla(22, 100%, 50%, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(
-        at 80% 100%,
-        hsla(242, 100%, 50%, 0.12) 0px,
-        transparent 50%
-      );
+    /* Dark mode: Deep navy with subtle warm undertone */
+    background-color: hsl(222, 47%, 9%);
+    background-image: linear-gradient(
+      135deg,
+      hsla(220, 50%, 12%, 0.8) 0%,
+      hsla(230, 45%, 10%, 0.6) 50%,
+      hsla(25, 30%, 12%, 0.3) 100%
+    );
   }
 
   /* Subtle inner highlight for cards */
@@ -482,5 +446,50 @@
 
   .metric-progress-fill {
     @apply h-full rounded-full transition-all duration-700 ease-out;
+  }
+
+  /* CHART TOOLTIP COMPONENTS (New Standard) */
+  .glass-tooltip {
+    @apply bg-popover/90 backdrop-blur-md border border-border/50 rounded-xl shadow-xl p-3 min-w-[180px];
+  }
+
+  .glass-tooltip-card {
+    @apply bg-background/40 rounded-lg p-2 border border-white/5;
+  }
+
+  .glass-tooltip-card-highlight {
+    @apply bg-primary/10 rounded-lg p-2 border border-primary/20;
+  }
+
+  .tooltip-label {
+    @apply text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5;
+  }
+
+  .tooltip-value {
+    @apply text-sm font-bold text-foreground;
+  }
+
+  .tooltip-metric-label {
+    @apply text-xs text-muted-foreground/80 font-medium;
+  }
+
+  .tooltip-metric-value {
+    @apply text-sm font-bold text-foreground tracking-tight;
+  }
+
+  .badge-growth {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ml-2;
+  }
+
+  .badge-growth-positive {
+    @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .badge-growth-negative {
+    @apply bg-red-500/10 text-red-600 dark:text-red-400;
+  }
+
+  .badge-growth-neutral {
+    @apply bg-slate-500/10 text-slate-600 dark:text-slate-400;
   }
 }

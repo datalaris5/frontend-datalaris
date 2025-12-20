@@ -16,13 +16,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useFilter } from "@/context/FilterContext";
 import { api } from "@/services/api";
 import { getTargetStores, buildPayload } from "@/utils/dashboardHelpers";
-import { format } from "date-fns";
+import { format, eachDayOfInterval } from "date-fns";
 
 interface DayOfWeekData {
   day: string;
-  displayMonth: string;
+  dayLabel: string; // Renamed from displayMonth for clarity
   full: string;
   orders: number;
+  average: number;
+  count: number;
 }
 
 // Mapping hari dari backend ke format display
@@ -90,13 +92,54 @@ export function useOperationalChartData() {
         });
       });
 
+      // Calculate sample size (counts of each day in date range)
+      const startDateObj = dateRange?.startDate;
+      const endDateObj = dateRange?.endDate;
+      const dayCounts: Record<string, number> = {};
+
+      if (startDateObj && endDateObj) {
+        const _interval = { start: startDateObj, end: endDateObj };
+        try {
+          const daysInInterval = eachDayOfInterval(_interval);
+          daysInInterval.forEach((date) => {
+            // date-fns format 'eeee' returns 'Monday', 'Tuesday' etc in English locale usually,
+            // but we need to match backend 'Senin', 'Selasa'.
+            // Simplest way: use backend mapping logic or standard JS Day Index.
+            // Backend output seems to be 'Senin', 'Selasa' etc.
+            // Let's rely on standard JS getDay() and map to our keys.
+            const dayIndex = date.getDay(); // 0 = Sunday, 1 = Monday
+            const dayNames = [
+              "Minggu",
+              "Senin",
+              "Selasa",
+              "Rabu",
+              "Kamis",
+              "Jumat",
+              "Sabtu",
+            ];
+            const dayName = dayNames[dayIndex];
+            dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+          });
+        } catch (e) {
+          console.error("Error calculating day counts", e);
+        }
+      }
+
       // Convert ke format yang dibutuhkan chart
-      const chartData: DayOfWeekData[] = dayOrder.map((day) => ({
-        day,
-        displayMonth: dayMapping[day]?.short || day.substring(0, 3),
-        full: dayMapping[day]?.full || day,
-        orders: dayTotals[day] || 0,
-      }));
+      const chartData: DayOfWeekData[] = dayOrder.map((day) => {
+        const total = dayTotals[day] || 0;
+        const count = dayCounts[day] || 1; // Avoid div by zero, though unlikely if range is valid
+        const average = count > 0 ? Math.round(total / count) : 0;
+
+        return {
+          day,
+          dayLabel: dayMapping[day]?.short || day.substring(0, 3),
+          full: dayMapping[day]?.full || day,
+          orders: total, // Revert to TOTAL (Sum)
+          average: average, // Keep average as secondary data
+          count: count,
+        };
+      });
 
       return chartData;
     },

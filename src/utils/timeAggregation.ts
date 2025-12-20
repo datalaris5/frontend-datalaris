@@ -6,9 +6,6 @@
  */
 
 import {
-  startOfWeek,
-  startOfMonth,
-  startOfQuarter,
   format,
   differenceInDays,
   parseISO,
@@ -113,13 +110,16 @@ export function aggregateToWeekly(
     { weekStartsOn: 1 }
   );
 
-  return weeks.map((weekStart) => {
+  return weeks.map((weekStart, index) => {
     const weekItems = data.filter((item) =>
       isSameWeek(parseISO(item.tanggal), weekStart, { weekStartsOn: 1 })
     );
 
+    // Format: "W1", "W2", dst. (W = Week, standar universal chart)
+    const weekLabel = `W${index + 1}`;
+
     return {
-      key: format(weekStart, "dd MMM", { locale: idLocale }),
+      key: weekLabel,
       value: calculateValue(weekItems, type),
       originalDate: weekStart,
     };
@@ -142,8 +142,13 @@ export function aggregateToMonthly(
       isSameMonth(parseISO(item.tanggal), monthStart)
     );
 
+    // Context-aware format: Jika tahun sama dengan endDate, cukup "MMM"
+    // Jika beda tahun, gunakan "MMM yy" (lebih ringkas dari yyyy)
+    const isSameYear = monthStart.getFullYear() === endDate.getFullYear();
+    const formatStr = isSameYear ? "MMM" : "MMM yy";
+
     return {
-      key: format(monthStart, "MMM yyyy", { locale: idLocale }),
+      key: format(monthStart, formatStr, { locale: idLocale }),
       value: calculateValue(monthItems, type),
       originalDate: monthStart,
     };
@@ -167,7 +172,13 @@ export function aggregateToQuarterly(
     );
 
     const quarterNum = Math.ceil((quarterStart.getMonth() + 1) / 3);
-    const quarterKey = `Q${quarterNum} ${format(quarterStart, "yyyy")}`;
+
+    // Context-aware format: Jika tahun sama dengan endDate, cukup "Q{n}"
+    // Jika beda tahun, gunakan "Q{n} yy"
+    const isSameYear = quarterStart.getFullYear() === endDate.getFullYear();
+    const quarterKey = isSameYear
+      ? `Q${quarterNum}`
+      : `Q${quarterNum} ${format(quarterStart, "yy")}`;
 
     return {
       key: quarterKey,

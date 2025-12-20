@@ -46,7 +46,8 @@ function TabToggle<T extends string>({
 }: TabToggleProps<T>) {
   // Style variants
   const activeStyles = {
-    primary: "bg-primary text-primary-foreground shadow-sm",
+    primary:
+      "bg-primary/20 text-primary font-medium border border-primary/50 shadow-[0_0_15px_rgba(249,115,22,0.3)] backdrop-blur-md",
     secondary: "bg-secondary text-secondary-foreground shadow-sm",
   };
 
@@ -61,7 +62,7 @@ function TabToggle<T extends string>({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10",
+        "flex items-center gap-1 border border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-md p-1 rounded-xl",
         className
       )}
     >
@@ -70,7 +71,7 @@ function TabToggle<T extends string>({
           key={item.value}
           onClick={() => onChange(item.value)}
           className={cn(
-            "font-semibold rounded-md transition-all",
+            "font-semibold rounded-lg transition-all",
             sizeStyles[size],
             activeValue === item.value ? activeStyles[variant] : inactiveStyles
           )}

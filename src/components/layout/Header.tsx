@@ -85,8 +85,8 @@ const Header: React.FC = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="filter"
-              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+              variant="ghost"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10 bg-black/5 dark:bg-white/5 border border-white/10 shadow-sm rounded-xl"
             >
               <div className="flex items-center gap-3 overflow-hidden text-left">
                 {/* Icon berdasarkan platform */}
@@ -158,8 +158,8 @@ const Header: React.FC = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="filter"
-              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+              variant="ghost"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10 bg-black/5 dark:bg-white/5 border border-white/10 shadow-sm rounded-xl"
             >
               <div className="flex items-center gap-3 overflow-hidden text-left">
                 <div

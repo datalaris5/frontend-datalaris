@@ -28,6 +28,7 @@ import { DashboardMetric } from "@/types/dashboard.types";
 import { ICON_STROKE_WIDTH, ICON_SIZES } from "@/config/dashboardIcons";
 import { trendBadgeStyles } from "@/config/themeConfig";
 import MetricCardSkeleton from "./MetricCardSkeleton";
+import { chartMetricCard, chartGrowthColors } from "@/config/chartTheme";
 
 interface MetricCardProps {
   metric: DashboardMetric;
@@ -44,26 +45,30 @@ const cardVariants = {
     y: 0,
     scale: 1,
     transition: {
-      delay: i * 0.06,
-      duration: 0.4,
+      delay: i * chartMetricCard.animation.staggerDelay,
+      duration: chartMetricCard.animation.cardDuration,
       ease: [0.25, 0.46, 0.45, 0.94],
     },
   }),
   hover: {
     y: -4,
-    transition: { type: "spring", stiffness: 400, damping: 20 },
+    transition: { type: "spring", stiffness: 400, damping: 20 } as any,
   },
   tap: { scale: 0.98 },
-};
+} as any;
 
 const sparklineVariants = {
   hidden: { opacity: 0, scaleX: 0.7 },
   visible: {
     opacity: 1,
     scaleX: 1,
-    transition: { delay: 0.3, duration: 0.5, ease: "easeOut" },
+    transition: {
+      delay: chartMetricCard.animation.sparklineDelay,
+      duration: 0.5,
+      ease: "easeOut",
+    },
   },
-};
+} as any;
 
 // Helper function untuk format value
 const formatMetricValue = (
@@ -88,7 +93,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
 }) => {
   // Loading state
   if (loading) {
-    return <MetricCardSkeleton highlight={metric.highlight} />;
+    return <MetricCardSkeleton />;
   }
 
   // Unified glass styling - konsisten untuk semua cards
@@ -111,7 +116,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
       >
         <Card
           className={`
-            relative overflow-hidden h-full rounded-xl cursor-default
+            relative overflow-hidden h-full rounded-2xl cursor-default
             ${baseCardClass}
           `}
         >
@@ -121,21 +126,23 @@ const MetricCard: React.FC<MetricCardProps> = ({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 {/* Icon - subtle monochrome */}
-                <div className="p-1.5 rounded-lg bg-muted/50 text-muted-foreground">
+                <div className="p-1.5 rounded-lg bg-muted/80 text-muted-foreground">
                   <metric.icon
                     size={ICON_SIZES.sm}
                     strokeWidth={ICON_STROKE_WIDTH}
                   />
                 </div>
                 {/* Title */}
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className={chartMetricCard.typography.title}>
                   {metric.title}
                 </span>
               </div>
 
               {/* Trend badge - di header */}
               <span
-                className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                className={`inline-flex items-center gap-0.5 ${
+                  chartMetricCard.typography.badge
+                } px-1.5 py-0.5 rounded-md ${
                   metric.trendUp
                     ? trendBadgeStyles.up.className
                     : trendBadgeStyles.down.className
@@ -152,17 +159,17 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
             {/* Value - Bold, prominent */}
             <p
-              className={`text-xl font-bold tracking-tight ${
+              className={`${chartMetricCard.typography.value} ${
                 metric.highlight ? "text-white" : "text-foreground"
               }`}
             >
               {metric.value === 0 ? (
-                <span className="text-muted-foreground/50">—</span>
+                <span className="text-muted-foreground">—</span>
               ) : (
                 <CountUp
                   start={0}
                   end={metric.value}
-                  duration={1.8}
+                  duration={chartMetricCard.animation.countUpDuration}
                   separator="."
                   decimal=","
                   decimals={
@@ -187,7 +194,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="text-[9px] text-muted-foreground/60 border-b border-dotted border-muted-foreground/30 cursor-help">
+                      <span
+                        className={`${chartMetricCard.typography.comparison} text-muted-foreground border-b border-dotted border-muted-foreground/50 cursor-help`}
+                      >
                         vs periode lalu
                       </span>
                     </TooltipTrigger>
@@ -232,8 +241,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
                                   <span
                                     className={`font-bold ${
                                       metric.trendUp
-                                        ? "text-emerald-500"
-                                        : "text-red-500"
+                                        ? chartGrowthColors.positive.text
+                                        : chartGrowthColors.negative.text
                                     }`}
                                   >
                                     {metric.trendUp ? "↑" : "↓"} {metric.trend}
@@ -268,12 +277,20 @@ const MetricCard: React.FC<MetricCardProps> = ({
                       >
                         <stop
                           offset="0%"
-                          stopColor={metric.highlight ? "#ffffff" : "#94a3b8"}
+                          stopColor={
+                            metric.highlight
+                              ? chartMetricCard.sparkline.colors.highlight
+                              : chartMetricCard.sparkline.colors.default
+                          }
                           stopOpacity={0.4}
                         />
                         <stop
                           offset="100%"
-                          stopColor={metric.highlight ? "#ffffff" : "#94a3b8"}
+                          stopColor={
+                            metric.highlight
+                              ? chartMetricCard.sparkline.colors.highlight
+                              : chartMetricCard.sparkline.colors.default
+                          }
                           stopOpacity={0}
                         />
                       </linearGradient>
@@ -281,9 +298,13 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     <Area
                       type="monotone"
                       dataKey="v"
-                      stroke={metric.highlight ? "#ffffff" : "#94a3b8"}
+                      stroke={
+                        metric.highlight
+                          ? chartMetricCard.sparkline.colors.highlight
+                          : chartMetricCard.sparkline.colors.default
+                      }
                       fill={`url(#grad-compact-${metric.color}-${staggerIndex})`}
-                      strokeWidth={1.5}
+                      strokeWidth={chartMetricCard.sparkline.strokeWidth}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

@@ -205,6 +205,63 @@ export const themeChartColors = {
 } as const;
 
 // ============================================
+// AI INSIGHT BANNER CONFIG
+// ============================================
+
+/**
+ * Konfigurasi terpusat untuk InsightBanner (AI-style)
+ * Mencakup styling, labels, dan icon config
+ */
+export const aiInsightConfig = {
+  // Labels & Text
+  labels: {
+    badge: "AI",
+    separator: "—",
+    peakDayPrefix: "Peak Day:",
+    peakDaySuffix: "pesanan/hari",
+  },
+
+  // Container Styling
+  container: {
+    base: "relative overflow-hidden rounded-xl py-2 px-3 mb-4",
+    gradient: {
+      light:
+        "bg-gradient-to-r from-violet-500/10 via-purple-500/5 to-fuchsia-500/10",
+      dark: "dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20",
+    },
+    border: "border border-violet-500/20 dark:border-violet-400/30",
+    shadow: "shadow-sm shadow-violet-500/5",
+    hover: "hover:shadow-md hover:shadow-violet-500/10",
+    transition: "transition-all duration-300",
+  },
+
+  // Icon Styling
+  icon: {
+    size: "w-4 h-4",
+    color: "text-violet-500 dark:text-violet-400",
+  },
+
+  // Badge Styling
+  badge: {
+    text: "text-[10px] font-bold uppercase tracking-wider",
+    color: "text-violet-600 dark:text-violet-400",
+    bg: "bg-violet-500/10 dark:bg-violet-500/20",
+    padding: "px-1.5 py-0.5 rounded",
+  },
+
+  // Text Styling
+  text: {
+    title: "text-xs font-semibold text-foreground whitespace-nowrap",
+    separator: "text-muted-foreground dark:text-slate-500 text-xs",
+    message: "text-xs text-muted-foreground dark:text-slate-300 truncate",
+  },
+
+  // Shimmer Effect
+  shimmer:
+    "absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite] pointer-events-none",
+} as const;
+
+// ============================================
 // EXPORT DEFAULT THEME
 // ============================================
 
@@ -213,6 +270,7 @@ export const defaultTheme = {
   brand: brandColors,
   status: statusThemes,
   chart: themeChartColors,
+  aiInsight: aiInsightConfig,
 } as const;
 
 export type ThemeConfig = typeof defaultTheme;

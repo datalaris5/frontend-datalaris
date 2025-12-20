@@ -59,7 +59,7 @@ export const generateSmartInsight = (
         iconBg: "bg-muted",
         iconText: "text-muted-foreground",
         text: "text-muted-foreground",
-        textDark: "text-muted-foreground",
+        textDark: "text-slate-200",
       },
     };
   }
