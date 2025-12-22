@@ -492,4 +492,363 @@
   .badge-growth-neutral {
     @apply bg-slate-500/10 text-slate-600 dark:text-slate-400;
   }
+
+  /* ============================================
+     AUTH PAGE GLASSMORPHISM EFFECTS
+  /* ============================================
+     iOS LIQUID GLASS EFFECT (2025 Standard)
+     - Opacity rendah (20-30%) agar blur terlihat
+     - Backdrop blur tinggi (40px+)
+     - Border tipis dengan white opacity
+     ============================================ */
+
+  /* Glass Container untuk Form - MAXIMUM iOS Liquid Glass Style */
+  .auth-glass-container {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(50px) saturate(200%);
+    -webkit-backdrop-filter: blur(50px) saturate(200%);
+    @apply border border-white/25 dark:border-white/15;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08),
+      0 0 80px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+    @apply rounded-3xl;
+    @apply relative overflow-hidden;
+  }
+
+  .dark .auth-glass-container {
+    background: rgba(17, 24, 39, 0.2);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3),
+      0 0 60px rgba(255, 255, 255, 0.03),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  /* Inner glow effect - top highlight */
+  .auth-glass-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.8),
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  /* Glass Input Fields - MAXIMUM Transparency (no blur to avoid dual glass) */
+  .auth-glass-input {
+    background: rgba(255, 255, 255, 0.18) !important;
+    /* No backdrop-filter - container already has blur */
+    @apply border border-white/30 dark:border-white/20;
+    @apply rounded-xl;
+    @apply transition-all duration-300 ease-out;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  .dark .auth-glass-input {
+    background: rgba(31, 41, 55, 0.3) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .auth-glass-input:focus {
+    background: rgba(255, 255, 255, 0.35) !important;
+    @apply ring-2 ring-primary/40 border-primary/50;
+    @apply shadow-lg shadow-primary/20;
+  }
+
+  .dark .auth-glass-input:focus {
+    background: rgba(31, 41, 55, 0.5) !important;
+  }
+
+  .auth-glass-input:hover:not(:focus) {
+    background: rgba(255, 255, 255, 0.3) !important;
+    @apply border-white/50 dark:border-white/30;
+  }
+
+  .dark .auth-glass-input:hover:not(:focus) {
+    background: rgba(31, 41, 55, 0.45) !important;
+  }
+
+  /* Placeholder color untuk visibility */
+  .auth-glass-input::placeholder {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+
+  /* Override browser autofill styling */
+  .auth-glass-input:-webkit-autofill,
+  .auth-glass-input:-webkit-autofill:hover,
+  .auth-glass-input:-webkit-autofill:focus,
+  .auth-glass-input:-webkit-autofill:active {
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: inherit;
+    transition: background-color 5000s ease-in-out 0s;
+    box-shadow: inset 0 0 20px 20px rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15) !important;
+  }
+
+  .dark .auth-glass-input:-webkit-autofill,
+  .dark .auth-glass-input:-webkit-autofill:hover,
+  .dark .auth-glass-input:-webkit-autofill:focus,
+  .dark .auth-glass-input:-webkit-autofill:active {
+    box-shadow: inset 0 0 20px 20px rgba(31, 41, 55, 0.1);
+    background: rgba(31, 41, 55, 0.25) !important;
+  }
+
+  /* Auth Input Icon - Always visible styling */
+  .auth-input-icon {
+    @apply text-gray-700 dark:text-gray-300;
+    @apply transition-colors duration-300;
+    z-index: 10;
+  }
+
+  /* Icon color adjusts when input is focused */
+  .auth-glass-input:focus ~ .auth-input-icon,
+  .auth-glass-input:not(:placeholder-shown) ~ .auth-input-icon {
+    @apply text-primary dark:text-primary;
+  }
+  /* Auth Icon Color - lebih visible */
+  .auth-icon {
+    @apply text-gray-800 dark:text-gray-200;
+  }
+
+  /* Auth Link - untuk link di halaman auth */
+  .auth-link {
+    @apply text-primary hover:text-primary/80 transition-colors;
+  }
+
+  .auth-link-bold {
+    @apply font-bold text-primary hover:text-primary/80 transition-colors;
+  }
+
+  /* Password Toggle Button */
+  .auth-password-toggle {
+    @apply absolute inset-y-0 right-0 pr-3 flex items-center;
+    @apply text-gray-800 dark:text-gray-200;
+    @apply hover:text-primary transition-colors;
+  }
+
+  /* Checkbox Label */
+  .auth-checkbox-label {
+    @apply text-gray-700 dark:text-gray-300 cursor-pointer;
+  }
+
+  /* Divider Text (atau) - Transparent to avoid dual glass */
+  /* Divider Text (atau) - Clean text without box */
+  .auth-divider-text {
+    @apply px-2;
+    @apply text-muted-foreground text-xs uppercase tracking-wider font-medium;
+    background: transparent;
+    border: none;
+  }
+
+  .dark .auth-divider-text {
+    background: transparent;
+    border: none;
+  }
+
+  /* Glass Button - No blur to avoid dual glass */
+  .auth-glass-button {
+    /* No backdrop-filter - container already has blur */
+    @apply shadow-lg shadow-primary/20;
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .auth-glass-button:hover {
+    @apply shadow-xl shadow-primary/40;
+    transform: translateY(-2px) scale(1.01);
+  }
+
+  .auth-glass-button:active {
+    transform: translateY(0) scale(0.99);
+  }
+
+  /* Auth Page Gradient Mesh - Login (Orange Theme) */
+  .auth-mesh-gradient-login {
+    background: linear-gradient(
+      135deg,
+      hsl(30, 100%, 97%) 0%,
+      hsl(340, 60%, 96%) 40%,
+      hsl(220, 50%, 97%) 100%
+    );
+    position: relative;
+  }
+
+  .dark .auth-mesh-gradient-login {
+    background: linear-gradient(
+      135deg,
+      hsl(24, 40%, 8%) 0%,
+      hsl(300, 30%, 8%) 40%,
+      hsl(220, 40%, 8%) 100%
+    );
+  }
+
+  /* Auth Page Gradient Mesh - Register (Blue Theme) */
+  .auth-mesh-gradient-register {
+    background: linear-gradient(
+      135deg,
+      hsl(220, 80%, 97%) 0%,
+      hsl(260, 60%, 96%) 40%,
+      hsl(200, 50%, 97%) 100%
+    );
+    position: relative;
+  }
+
+  .dark .auth-mesh-gradient-register {
+    background: linear-gradient(
+      135deg,
+      hsl(220, 40%, 8%) 0%,
+      hsl(260, 30%, 8%) 40%,
+      hsl(200, 40%, 8%) 100%
+    );
+  }
+
+  /* Decorative Blur Orbs */
+  .auth-orb {
+    @apply absolute rounded-full blur-3xl;
+    @apply pointer-events-none;
+    @apply animate-pulse;
+    animation-duration: 8s;
+  }
+
+  .auth-orb-orange {
+    @apply bg-orange-400/20 dark:bg-orange-500/10;
+  }
+
+  .auth-orb-blue {
+    @apply bg-blue-400/20 dark:bg-blue-500/10;
+  }
+
+  .auth-orb-purple {
+    @apply bg-purple-400/15 dark:bg-purple-500/10;
+  }
+
+  /* Glass Divider - Solid Semi-transparent (no blur to avoid dual glass) */
+  .auth-glass-divider {
+    background: rgba(255, 255, 255, 0.4);
+    /* No backdrop-filter - container already has blur */
+    height: 1px;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
+  }
+
+  .dark .auth-glass-divider {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Social Login Button - MAXIMUM Transparency (no blur to avoid dual glass) */
+  .auth-social-button {
+    background: rgba(255, 255, 255, 0.18) !important;
+    /* No backdrop-filter - container already has blur */
+    @apply border border-white/30 dark:border-white/20;
+    @apply transition-all duration-300;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  .dark .auth-social-button {
+    background: rgba(31, 41, 55, 0.3) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .auth-social-button:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    @apply border-white/40;
+    transform: translateY(-1px);
+  }
+
+  .dark .auth-social-button:hover {
+    background: rgba(31, 41, 55, 0.4) !important;
+  }
+
+  /* Fade in animation for auth elements */
+  @keyframes authFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .auth-animate-in {
+    animation: authFadeIn 0.5s ease-out;
+    animation-fill-mode: backwards;
+  }
+
+  .auth-animate-in-delay-1 {
+    animation-delay: 0.1s;
+  }
+
+  /* Hero Section Glass Card - MAXIMUM Liquid Glass Style */
+  .auth-hero-glass-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(50px) saturate(200%);
+    -webkit-backdrop-filter: blur(50px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15),
+      0 0 60px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+    @apply rounded-3xl relative overflow-hidden;
+  }
+
+  /* Hero Section Glass Icon - MAXIMUM Liquid Glass Style */
+  .auth-hero-glass-icon {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Hero Section Gradients */
+  .auth-hero-gradient-orange {
+    @apply bg-gradient-to-br from-orange-500 to-red-600;
+  }
+
+  .auth-hero-gradient-blue {
+    @apply bg-gradient-to-br from-blue-600 to-purple-700;
+  }
+
+  /* Hero Background Image Overlay */
+  .auth-hero-bg-overlay {
+    @apply absolute inset-0 opacity-10 bg-cover bg-center;
+  }
+
+  /* Decorative Orbs for Hero Section */
+  .auth-hero-orb {
+    @apply absolute rounded-full pointer-events-none;
+  }
+
+  .auth-hero-orb-white {
+    @apply bg-white/20 blur-3xl;
+  }
+
+  .auth-hero-orb-pink {
+    @apply bg-pink-300/30 blur-3xl;
+  }
+
+  .auth-hero-orb-yellow {
+    @apply bg-yellow-300/20 blur-2xl;
+  }
+
+  .auth-hero-orb-purple {
+    @apply bg-purple-400/30 blur-3xl;
+  }
+
+  .auth-hero-orb-cyan {
+    @apply bg-cyan-300/20 blur-2xl;
+  }
+  .auth-animate-in-delay-2 {
+    animation-delay: 0.2s;
+  }
+
+  .auth-animate-in-delay-3 {
+    animation-delay: 0.3s;
+  }
 }

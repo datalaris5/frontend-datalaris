@@ -19,11 +19,12 @@
 import React, { useState, FormEvent } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Lock, Mail, User, Rocket } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, User, Rocket, Building2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AUTH_IMAGE_REGISTER } from "@/constants/authImages";
 
 // Interface untuk error dari axios
 interface AxiosError {
@@ -67,34 +68,56 @@ const AuthRegister: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex transition-colors overflow-hidden">
-      {/* Bagian Kiri - Hero Image/Content (kebalikan dari Login) */}
-      <div className="hidden md:flex w-1/2 bg-gradient-to-br from-blue-900 to-slate-900 p-12 items-center justify-center relative overflow-hidden">
-        {/* Background image */}
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1615&q=80')] opacity-20 bg-cover bg-center"></div>
+    <div className="h-screen flex transition-colors overflow-hidden auth-mesh-gradient-register">
+      {/* Decorative Glass Orbs */}
+      <div className="auth-orb auth-orb-blue w-80 h-80 -top-40 right-1/4" />
+      <div className="auth-orb auth-orb-purple w-96 h-96 -bottom-48 -right-20" />
 
-        {/* Content */}
-        <div className="relative z-10 text-white max-w-lg text-center">
-          <div className="mb-8 flex justify-center">
-            <div className="h-20 w-20 glass-icon rounded-full flex items-center justify-center">
-              <Rocket size={40} className="text-blue-300" />
+      {/* Bagian Kiri - Hero Image/Content (kebalikan dari Login) */}
+      <div className="hidden md:flex w-1/2 auth-hero-gradient-blue p-12 items-center justify-center relative overflow-hidden">
+        {/* Background image */}
+        <div
+          className="auth-hero-bg-overlay opacity-20"
+          style={{
+            backgroundImage: `url('${AUTH_IMAGE_REGISTER}')`,
+          }}
+        />
+
+        {/* Decorative Blur Orbs */}
+        <div className="auth-hero-orb auth-hero-orb-white w-64 h-64 -top-20 -left-20" />
+        <div className="auth-hero-orb auth-hero-orb-purple w-80 h-80 -bottom-32 -right-20" />
+        <div className="auth-hero-orb auth-hero-orb-cyan w-40 h-40 top-1/3 left-1/4" />
+
+        {/* Glass Card Content - Liquid Glass Style */}
+        <div className="relative z-10 max-w-xl w-full mx-8">
+          <div className="auth-hero-glass-card px-10 py-8 text-center">
+            {/* Icon - Liquid Glass */}
+            <div className="mb-6 flex justify-center">
+              <div className="h-20 w-20 rounded-full flex items-center justify-center auth-hero-glass-icon">
+                <Rocket size={40} className="text-blue-300" />
+              </div>
             </div>
+
+            {/* Heading */}
+            <h2 className="text-3xl font-bold mb-4 text-white">
+              Mulai Perjalanan Bisnis Anda
+            </h2>
+
+            {/* Description */}
+            <p className="text-base text-white/90 leading-relaxed">
+              Bergabunglah dengan ribuan seller lainnya yang telah
+              mengoptimalkan penjualan mereka menggunakan Datalaris. Gratis
+              untuk memulai!
+            </p>
           </div>
-          <h2 className="text-4xl font-bold mb-6">
-            Mulai Perjalanan Bisnis Anda
-          </h2>
-          <p className="text-lg text-blue-100 leading-relaxed">
-            Bergabunglah dengan ribuan seller lainnya yang telah mengoptimalkan
-            penjualan mereka menggunakan Datalaris. Gratis untuk memulai!
-          </p>
         </div>
       </div>
 
       {/* Bagian Kanan - Form Register */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto relative z-10">
+        <div className="w-full max-w-lg auth-glass-container p-8 sm:p-10 auth-animate-in">
           {/* Header */}
-          <div className="text-center md:text-left">
+          <div className="text-center md:text-left mb-6">
             <h1 className="text-3xl font-bold text-foreground mb-2">
               Buat Akun Baru
             </h1>
@@ -104,21 +127,21 @@ const AuthRegister: React.FC = () => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleRegister} className="space-y-6">
+          <form onSubmit={handleRegister} className="space-y-4">
             {/* Name Field */}
             <div className="space-y-2">
               <Label htmlFor="name">Nama Lengkap</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
+                  <User className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
-                  placeholder="Nama Anda"
+                  className="pl-10 h-12 auth-glass-input"
+                  placeholder="Masukkan nama lengkap"
                   required
                 />
               </div>
@@ -129,14 +152,14 @@ const AuthRegister: React.FC = () => {
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
+                  className="pl-10 h-12 auth-glass-input"
                   placeholder="nama@email.com"
                   required
                 />
@@ -148,21 +171,21 @@ const AuthRegister: React.FC = () => {
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 h-12 rounded-xl"
+                  className="pl-10 pr-10 h-12 auth-glass-input"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  className="auth-password-toggle"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -175,43 +198,38 @@ const AuthRegister: React.FC = () => {
 
             {/* Tenant Name Field (Opsional) */}
             <div className="space-y-2">
-              <Label htmlFor="tenant-name">Nama Bisnis / Tenant</Label>
+              <Label htmlFor="tenant-name">Nama Perusahaan</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400">🏪</span>
+                  <Building2 className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="tenant-name"
                   type="text"
                   value={tenantName}
                   onChange={(e) => setTenantName(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
-                  placeholder="Nama bisnis Anda (opsional)"
+                  className="pl-10 h-12 auth-glass-input"
+                  placeholder="Nama perusahaan Anda (opsional)"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Kosongkan untuk menggunakan nama Anda sebagai nama bisnis
+                Kosongkan untuk menggunakan nama Anda sebagai nama perusahaan
               </p>
             </div>
 
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 text-md font-bold rounded-xl"
+              className="w-full h-12 text-md font-bold rounded-xl auth-glass-button"
             >
               Daftar Sekarang
             </Button>
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">
-                  Atau daftar dengan
-                </span>
-              </div>
+            {/* Divider - Clean flexbox approach */}
+            <div className="flex items-center gap-4 my-5">
+              <div className="flex-1 auth-glass-divider"></div>
+              <span className="auth-divider-text">Atau daftar dengan</span>
+              <div className="flex-1 auth-glass-divider"></div>
             </div>
 
             {/* Google Register (Coming Soon) */}
@@ -219,7 +237,7 @@ const AuthRegister: React.FC = () => {
               type="button"
               variant="outline"
               disabled
-              className="w-full h-12 rounded-xl opacity-60 cursor-not-allowed"
+              className="w-full h-12 rounded-xl auth-social-button opacity-60 cursor-not-allowed"
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <path
@@ -239,17 +257,14 @@ const AuthRegister: React.FC = () => {
                   fill="#EA4335"
                 />
               </svg>
-              Google (Coming Soon)
+              Google (Segera Hadir)
             </Button>
           </form>
 
           {/* Link ke Login */}
-          <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div className="mt-8 text-center text-sm text-muted-foreground">
             Sudah punya akun?{" "}
-            <Link
-              to="/login"
-              className="font-bold text-primary hover:text-blue-500"
-            >
+            <Link to="/login" className="auth-link-bold">
               Masuk di sini
             </Link>
           </div>
