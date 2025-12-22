@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AUTH_IMAGE_LOGIN } from "@/constants/authImages";
 
 const AuthLogin: React.FC = () => {
   // State untuk form inputs
@@ -52,35 +53,39 @@ const AuthLogin: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex transition-colors overflow-hidden">
+    <div className="h-screen flex transition-colors overflow-hidden auth-mesh-gradient-login">
+      {/* Decorative Glass Orbs */}
+      <div className="auth-orb auth-orb-orange w-80 h-80 -top-40 -left-20" />
+      <div className="auth-orb auth-orb-purple w-96 h-96 -bottom-48 left-1/4" />
+
       {/* Bagian Kiri - Form Login */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 overflow-y-auto relative z-10">
+        <div className="w-full max-w-md auth-glass-container p-8 sm:p-10 auth-animate-in">
           {/* Header */}
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl font-bold text-primary mb-2">
+          <div className="text-center md:text-left mb-8">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
               Selamat Datang Kembali!
             </h1>
             <p className="text-muted-foreground">
-              Masuk untuk mengelola dan memantau performa toko Anda.
+              Masuk untuk memantau performa toko Anda.
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
+                  className="pl-10 h-12 auth-glass-input"
                   placeholder="nama@email.com"
                   required
                 />
@@ -92,14 +97,14 @@ const AuthLogin: React.FC = () => {
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-5 w-5 auth-icon" />
                 </div>
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 h-12 rounded-xl"
+                  className="pl-10 pr-10 h-12 auth-glass-input"
                   placeholder="••••••••"
                   required
                 />
@@ -107,7 +112,7 @@ const AuthLogin: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  className="auth-password-toggle"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -122,17 +127,11 @@ const AuthLogin: React.FC = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center space-x-2">
                 <Checkbox id="remember-me" />
-                <Label
-                  htmlFor="remember-me"
-                  className="text-gray-700 dark:text-gray-300 cursor-pointer"
-                >
+                <Label htmlFor="remember-me" className="auth-checkbox-label">
                   Ingat saya
                 </Label>
               </div>
-              <a
-                href="#"
-                className="text-primary hover:text-orange-700 font-medium"
-              >
+              <a href="#" className="auth-link font-medium">
                 Lupa password?
               </a>
             </div>
@@ -140,21 +139,16 @@ const AuthLogin: React.FC = () => {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 text-md font-bold rounded-xl"
+              className="w-full h-12 text-md font-bold rounded-xl auth-glass-button"
             >
               Masuk
             </Button>
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">
-                  Atau masuk dengan
-                </span>
-              </div>
+            {/* Divider - Clean flexbox approach */}
+            <div className="flex items-center gap-4 my-6">
+              <div className="flex-1 auth-glass-divider"></div>
+              <span className="auth-divider-text">Atau masuk dengan</span>
+              <div className="flex-1 auth-glass-divider"></div>
             </div>
 
             {/* Google Login (Coming Soon) */}
@@ -162,7 +156,7 @@ const AuthLogin: React.FC = () => {
               type="button"
               variant="outline"
               disabled
-              className="w-full h-12 rounded-xl opacity-60 cursor-not-allowed"
+              className="w-full h-12 rounded-xl auth-social-button opacity-60 cursor-not-allowed"
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <path
@@ -182,17 +176,14 @@ const AuthLogin: React.FC = () => {
                   fill="#EA4335"
                 />
               </svg>
-              Google (Coming Soon)
+              Google (Segera Hadir)
             </Button>
           </form>
 
           {/* Link ke Register */}
-          <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div className="mt-8 text-center text-sm text-muted-foreground">
             Belum punya akun?{" "}
-            <Link
-              to="/register"
-              className="font-bold text-primary hover:text-orange-500"
-            >
+            <Link to="/register" className="auth-link-bold">
               Daftar sekarang
             </Link>
           </div>
@@ -200,25 +191,41 @@ const AuthLogin: React.FC = () => {
       </div>
 
       {/* Bagian Kanan - Hero Image/Content */}
-      <div className="hidden md:flex w-1/2 bg-gradient-to-br from-orange-500 to-red-600 p-12 items-center justify-center relative overflow-hidden">
+      <div className="hidden md:flex w-1/2 auth-hero-gradient-orange p-12 items-center justify-center relative overflow-hidden">
         {/* Background image dengan opacity */}
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1574&q=80')] opacity-10 bg-cover bg-center"></div>
+        <div
+          className="auth-hero-bg-overlay"
+          style={{
+            backgroundImage: `url('${AUTH_IMAGE_LOGIN}')`,
+          }}
+        />
 
-        {/* Content */}
-        <div className="relative z-10 text-white max-w-lg text-center">
-          <div className="mb-8 flex justify-center">
-            <div className="h-20 w-20 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center">
-              <TrendingUp size={40} className="text-white" />
+        {/* Decorative Blur Orbs */}
+        <div className="auth-hero-orb auth-hero-orb-white w-64 h-64 -top-20 -right-20" />
+        <div className="auth-hero-orb auth-hero-orb-pink w-80 h-80 -bottom-32 -left-20" />
+        <div className="auth-hero-orb auth-hero-orb-yellow w-40 h-40 top-1/2 right-1/4" />
+
+        {/* Glass Card Content - Liquid Glass Style */}
+        <div className="relative z-10 max-w-xl w-full mx-8">
+          <div className="auth-hero-glass-card px-10 py-8 text-center">
+            {/* Icon - Liquid Glass */}
+            <div className="mb-6 flex justify-center">
+              <div className="h-20 w-20 rounded-2xl flex items-center justify-center auth-hero-glass-icon">
+                <TrendingUp size={40} className="text-white" />
+              </div>
             </div>
+
+            {/* Heading */}
+            <h2 className="text-3xl font-bold mb-4 text-white">
+              Analisis Penjualan Jadi Lebih Mudah
+            </h2>
+
+            {/* Description */}
+            <p className="text-base text-white/90 leading-relaxed">
+              Pantau performa toko semua platform dalam satu dashboard.
+              Tingkatkan omset dengan keputusan berbasis data.
+            </p>
           </div>
-          <h2 className="text-4xl font-bold mb-6">
-            Analisis Penjualan Jadi Lebih Mudah
-          </h2>
-          <p className="text-lg text-orange-100 leading-relaxed">
-            Datalaris membantu Anda memantau performa toko di Shopee dan TikTok
-            Shop dalam satu dashboard terintegrasi. Tingkatkan omset dengan
-            keputusan berbasis data.
-          </p>
         </div>
       </div>
     </div>
