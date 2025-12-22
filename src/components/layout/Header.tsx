@@ -27,7 +27,6 @@ import { ShopeeLogo, TikTokLogo } from "../common/Icons";
 import { useAuth } from "@/context/AuthContext";
 import { useFilter } from "@/context/FilterContext";
 import ThemeToggle from "../common/ThemeToggle";
-import DateRangePicker from "../common/DateRangePicker";
 
 // Shadcn UI Components
 import { Button } from "@/components/ui/button";
@@ -86,8 +85,8 @@ const Header: React.FC = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="filter"
-              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+              variant="ghost"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10 bg-black/5 dark:bg-white/5 border border-white/10 shadow-sm rounded-xl"
             >
               <div className="flex items-center gap-3 overflow-hidden text-left">
                 {/* Icon berdasarkan platform */}
@@ -159,8 +158,8 @@ const Header: React.FC = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="filter"
-              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10"
+              variant="ghost"
+              className="w-[220px] sm:w-[260px] justify-between h-12 px-4 group transition-all hover:ring-2 hover:ring-primary/10 bg-black/5 dark:bg-white/5 border border-white/10 shadow-sm rounded-xl"
             >
               <div className="flex items-center gap-3 overflow-hidden text-left">
                 <div
@@ -227,18 +226,6 @@ const Header: React.FC = () => {
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* ===== Date Range Picker ===== */}
-        <div className="hidden xl:block">
-          <DateRangePicker
-            maxDate={new Date(new Date().setDate(new Date().getDate() - 2))}
-            minDate={
-              window.location.pathname.includes("orders")
-                ? new Date(2025, 5, 1)
-                : new Date(2024, 0, 1)
-            }
-          />
-        </div>
       </div>
 
       {/* Bagian kanan: Theme, Notifications, Profile */}

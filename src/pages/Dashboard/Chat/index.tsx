@@ -48,6 +48,8 @@ import FeatureNotReady from "@/components/common/FeatureNotReady";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CountUp from "react-countup";
+import MetricCard from "@/components/dashboard/MetricCard";
+import { MetricColor } from "@/types/dashboard.types";
 
 // Tipe untuk tooltip props dari Recharts
 interface TooltipPayload {
@@ -128,7 +130,7 @@ interface ChatMetric {
   trendUp: boolean;
   data: number[];
   icon: LucideIcon;
-  color: string;
+  color: MetricColor;
   highlight?: boolean;
   isDummy: boolean;
 }
@@ -611,159 +613,6 @@ const DashboardChat: React.FC = () => {
           </FeatureNotReady>
         </div>
       </div>
-    </div>
-  );
-};
-
-/**
- * MetricCard Component
- * Kartu metrik dengan styling premium
- */
-interface MetricCardProps {
-  metric: ChatMetric;
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({ metric }) => {
-  const colorThemes: Record<
-    string,
-    { iconBg: string; iconText: string; accent: string; accentClass: string }
-  > = {
-    blue: {
-      iconBg: "bg-gradient-to-br from-blue-500 to-indigo-500",
-      iconText: "text-white",
-      accent: "#3b82f6",
-      accentClass: "from-blue-500 to-blue-500/80",
-    },
-    emerald: {
-      iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
-      iconText: "text-white",
-      accent: "#10b981",
-      accentClass: "from-emerald-500 to-emerald-500/80",
-    },
-    purple: {
-      iconBg: "bg-gradient-to-br from-purple-500 to-violet-500",
-      iconText: "text-white",
-      accent: "#a855f7",
-      accentClass: "from-purple-500 to-purple-500/80",
-    },
-    orange: {
-      iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
-      iconText: "text-white",
-      accent: "#f97316",
-      accentClass: "from-orange-500 to-orange-500/80",
-    },
-    cyan: {
-      iconBg: "bg-gradient-to-br from-cyan-500 to-sky-500",
-      iconText: "text-white",
-      accent: "#06b6d4",
-      accentClass: "from-cyan-500 to-cyan-500/80",
-    },
-    green: {
-      iconBg: "bg-gradient-to-br from-green-500 to-emerald-600",
-      iconText: "text-white",
-      accent: "#22c55e",
-      accentClass: "from-green-500 to-green-500/80",
-    },
-    pink: {
-      iconBg: "bg-gradient-to-br from-pink-500 to-rose-500",
-      iconText: "text-white",
-      accent: "#ec4899",
-      accentClass: "from-pink-500 to-pink-500/80",
-    },
-  };
-  const theme = colorThemes[metric.color] || colorThemes.blue;
-  const highlightClass = metric.highlight
-    ? "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 shadow-blue-500/40 text-white border-transparent shadow-2xl ring-1 ring-white/20"
-    : "glass-card hover:shadow-2xl";
-
-  return (
-    <div className="h-full">
-      <FeatureNotReady
-        blur={metric.isDummy}
-        overlay={metric.isDummy}
-        message="Segera Hadir"
-      >
-        <Card
-          className={`relative overflow-hidden h-full transition-all duration-300 hover:scale-[1.02] rounded-2xl ${highlightClass}`}
-        >
-          {!metric.highlight && (
-            <div
-              className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-gradient-to-b ${theme.accentClass}`}
-            />
-          )}
-          <div className="absolute -bottom-3 -right-3 opacity-[0.08] rotate-12 pointer-events-none">
-            <metric.icon size={64} />
-          </div>
-          <div className="relative z-10 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div
-                className={`p-2.5 rounded-xl shadow-lg ${
-                  metric.highlight
-                    ? "bg-white/20 text-white shadow-white/10"
-                    : `${theme.iconBg} ${theme.iconText}`
-                }`}
-              >
-                <metric.icon size={18} strokeWidth={2.5} />
-              </div>
-              <h3
-                className={`text-xs font-semibold leading-tight ${
-                  metric.highlight ? "text-white/90" : "text-muted-foreground"
-                }`}
-              >
-                {metric.title}
-              </h3>
-            </div>
-            <p
-              className={`text-2xl font-extrabold tracking-tight mb-2 ${
-                metric.highlight ? "text-white" : "text-foreground"
-              }`}
-            >
-              <CountUp
-                start={0}
-                end={metric.value}
-                duration={2.0}
-                separator="."
-                decimal=","
-                decimals={
-                  metric.format === "currency"
-                    ? 0
-                    : metric.format === "number" && metric.value % 1 !== 0
-                    ? 2
-                    : 0
-                }
-                prefix={metric.format === "currency" ? "Rp" : ""}
-                suffix={metric.format === "percent" ? "%" : metric.suffix || ""}
-              />
-            </p>
-            <div className="flex items-center justify-between">
-              <span
-                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                  metric.highlight
-                    ? "bg-white/20 text-white"
-                    : metric.trendUp
-                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
-                }`}
-              >
-                {metric.trendUp ? "↑" : "↓"} {metric.trend}
-              </span>
-              <div className="w-16 h-8">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={metric.data.map((v, i) => ({ i, v }))}>
-                    <Line
-                      type="monotone"
-                      dataKey="v"
-                      stroke={metric.highlight ? "#ffffff" : theme.accent}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </FeatureNotReady>
     </div>
   );
 };

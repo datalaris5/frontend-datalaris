@@ -217,3 +217,32 @@ export const aggregateByDayOfWeek = (
     displayMonth: d.name, // XAxis key
   }));
 };
+
+// ==========================================
+// FORMAT AXIS VALUE
+// ==========================================
+
+/**
+ * Format nilai angka untuk Y-Axis chart
+ * Mengkonversi angka besar ke format ringkas (rb, jt, M)
+ *
+ * @param value - Nilai yang akan diformat
+ * @returns String terformat (e.g., "1.5M", "500jt", "10rb")
+ *
+ * @example
+ * formatAxisValue(1500000000) // "1.5M"
+ * formatAxisValue(500000000)  // "500jt"
+ * formatAxisValue(50000)      // "50rb"
+ */
+export const formatAxisValue = (value: number): string => {
+  if (value >= 1000000000) {
+    return `${(value / 1000000000).toFixed(1)}M`;
+  }
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(0)}jt`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(0)}rb`;
+  }
+  return String(value);
+};

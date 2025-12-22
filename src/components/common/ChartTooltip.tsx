@@ -28,7 +28,8 @@ interface PayloadEntry {
     full?: string;
     name?: string;
     orders?: number;
-    totalOrders?: number;
+    totalOrders?: number; // removed if not used, but used in old code. New code uses 'orders' as Total.
+    average?: number;
     count?: number;
     [key: string]: number | string | null | undefined;
   };
@@ -92,51 +93,39 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({
     if (!data) return null;
 
     return (
-      <div className="glass-tooltip">
+      <div className="glass-tooltip p-2.5 min-w-[150px]">
         {/* Header nama hari */}
-        <div className="mb-3">
-          <p className="tooltip-label">Hari</p>
-          <p className="tooltip-value">{data.full || data.name}</p>
+        <div className="mb-2 pb-2 border-b border-border/50">
+          <p className="text-xs font-bold text-foreground">
+            {data.full || data.name}
+          </p>
         </div>
 
-        {/* Grid statistik */}
-        <div className="space-y-2.5">
-          {/* Rata-rata (Primary - Highlighted) */}
-          <div className="glass-tooltip-card-highlight">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-primary">
-                Rata-rata
-              </span>
-              <span className="text-base font-bold text-primary tabular-nums">
-                {new Intl.NumberFormat("id-ID").format(data.orders || 0)}
-              </span>
-            </div>
-            <p className="text-[10px] text-primary/70 mt-0.5 font-medium">
-              pesanan per hari
-            </p>
+        {/* List statistik */}
+        <div className="space-y-2">
+          {/* Total (Primary) */}
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs text-muted-foreground">Total</span>
+            <span className="text-sm font-bold text-primary tabular-nums">
+              {new Intl.NumberFormat("id-ID").format(data.orders || 0)}
+            </span>
           </div>
 
-          {/* Statistik sekunder */}
-          <div className="grid grid-cols-2 gap-2">
-            {/* Total */}
-            <div className="glass-tooltip-card">
-              <p className="text-[10px] text-muted-foreground font-medium">
-                Total
-              </p>
-              <p className="tooltip-metric-value">
-                {new Intl.NumberFormat("id-ID").format(data.totalOrders || 0)}
-              </p>
-            </div>
+          {/* Secondary Stats (Compact) */}
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[10px] text-muted-foreground/80">
+              Rata-rata
+            </span>
+            <span className="text-xs font-medium text-foreground/80 tabular-nums">
+              {new Intl.NumberFormat("id-ID").format(data.average || 0)}
+            </span>
+          </div>
 
-            {/* Sample size */}
-            <div className="glass-tooltip-card">
-              <p className="text-[10px] text-muted-foreground font-medium">
-                Sample
-              </p>
-              <p className="text-sm font-bold text-foreground">
-                {data.count || 0} hari
-              </p>
-            </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[10px] text-muted-foreground/80">Sample</span>
+            <span className="text-xs font-medium text-foreground/80 tabular-nums">
+              {data.count || 0} hari
+            </span>
           </div>
         </div>
       </div>
@@ -145,12 +134,11 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({
 
   // Rendering default untuk tipe chart lainnya
   return (
-    <div className="glass-tooltip">
+    <div className="glass-tooltip p-2.5 min-w-[150px]">
       {/* Header Label */}
       {!hideLabel && (
-        <div className="mb-3">
-          <p className="tooltip-label">Periode</p>
-          <p className="tooltip-value">{label}</p>
+        <div className="mb-2 pb-2 border-b border-border/50">
+          <p className="text-xs font-bold text-foreground">{label}</p>
         </div>
       )}
 
@@ -193,17 +181,24 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({
           }
 
           return (
-            <div key={index} className="glass-tooltip-card">
-              {/* Header metric */}
-              <p className="tooltip-metric-label">{entry.name}</p>
+            <div
+              key={index}
+              className="flex items-center justify-between gap-4"
+            >
+              {/* Metric Name */}
+              <span className="text-xs text-muted-foreground">
+                {entry.name}
+              </span>
 
-              {/* Value & Growth badge */}
-              <div className="flex items-center justify-between">
-                <span className="tooltip-metric-value">
+              {/* Value & Growth */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-primary tabular-nums">
                   {formatValue(entry.value || 0, entry.name)}
                 </span>
                 {showGrowth && (
-                  <span className={`badge-growth ${badgeColorClass}`}>
+                  <span
+                    className={`badge-growth ${badgeColorClass} ml-0 scale-90 origin-right`}
+                  >
                     {icon} {Math.abs(growth!).toFixed(1)}%
                   </span>
                 )}

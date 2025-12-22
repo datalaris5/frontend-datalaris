@@ -94,12 +94,46 @@ const AdminDashboard: React.FC = () => {
   const fetchStats = async (): Promise<void> => {
     try {
       setLoading(true);
-      const data = await DashboardService.getStats({
-        store_id: storeId,
-        date_from: dateRange.date_from,
-        date_to: dateRange.date_to,
+      const params = {
+        store_id: storeId.toString(),
+        date_from: dateRange.date_from || "",
+        date_to: dateRange.date_to || "",
+      };
+
+      // Call endpoints individually
+      const [crRes, bsRes, visitorsRes] = await Promise.all([
+        DashboardService.conversionRate(params as any),
+        DashboardService.basketSize(params as any),
+        DashboardService.totalPengunjung(params as any),
+      ]);
+
+      const crData = crRes.data?.data || {
+        total: 0,
+        percent: 0,
+        trend: "Equal",
+      };
+      const bsData = bsRes.data?.data || {
+        total: 0,
+        percent: 0,
+        trend: "Equal",
+      };
+      const visData = visitorsRes.data?.data || {
+        total: 0,
+        percent: 0,
+        trend: "Equal",
+      };
+
+      setStats({
+        conversionRate: crData,
+        basketSize: bsData,
+        totalVisitors: visData,
+        // Mocking New Buyers as API is missing
+        totalNewBuyers: {
+          total: 0,
+          percent: 0,
+          trend: "Equal",
+        },
       });
-      setStats(data);
     } catch (err) {
       console.error("Failed to fetch dashboard stats:", err);
     } finally {

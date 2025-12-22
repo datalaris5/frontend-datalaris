@@ -1,0 +1,48 @@
+@layer components {
+  /* ... existing classes ... */
+
+  /* CHART TOOLTIP COMPONENTS (New Standard) */
+  .glass-tooltip {
+    @apply bg-popover/90 backdrop-blur-md border border-border/50 rounded-xl shadow-xl p-3 min-w-[180px];
+  }
+
+  .glass-tooltip-card {
+    @apply bg-background/40 rounded-lg p-2 border border-white/5;
+  }
+
+  .glass-tooltip-card-highlight {
+    @apply bg-primary/10 rounded-lg p-2 border border-primary/20;
+  }
+
+  .tooltip-label {
+    @apply text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5;
+  }
+
+  .tooltip-value {
+    @apply text-sm font-bold text-foreground;
+  }
+
+  .tooltip-metric-label {
+    @apply text-xs text-muted-foreground/80 font-medium;
+  }
+
+  .tooltip-metric-value {
+    @apply text-sm font-bold text-foreground tracking-tight;
+  }
+
+  .badge-growth {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ml-2;
+  }
+
+  .badge-growth-positive {
+    @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .badge-growth-negative {
+    @apply bg-red-500/10 text-red-600 dark:text-red-400;
+  }
+
+  .badge-growth-neutral {
+    @apply bg-slate-500/10 text-slate-600 dark:text-slate-400;
+  }
+}

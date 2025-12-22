@@ -5,19 +5,21 @@
  *
  * Metrik Utama (6 cards):
  * - Total Penjualan, Total Pesanan, Convertion Rate
- * - Basket Size, Total Pengunjung, Produk Terjual
+ * - Basket Size, Total Pengunjung, Pembeli Baru
  *
  * Charts:
  * - Analisa Tren (Area Chart) - Monthly/Quarterly toggle
  * - Analisa Operasional (Bar Chart) - Orders by day of week
  *
- * Data Flow:
- * 1. Metrics fetch berdasarkan filter (store + dateRange)
- * 2. Chart fetch untuk full year aggregation
- * 3. Multi-store aggregation jika store="all"
+ * Data Flow (React Query Pattern):
+ * 1. useDashboardMetrics() - Auto fetch metrics dengan caching
+ * 2. useOverviewChartData() - Auto fetch chart data (full year)
+ * 3. Error handling otomatis dengan toast notifications
+ * 4. Skeleton loading untuk better UX
+ * 5. Multi-store aggregation via hooks
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -28,109 +30,196 @@ import {
   Tooltip,
   BarChart,
   Bar,
+  Cell,
 } from "recharts";
 import {
-  ShoppingBag,
-  Users,
-  DollarSign,
-  MousePointer,
-  Package,
+  Banknote,
+  ShoppingCart,
+  Percent,
+  ShoppingBasket,
+  UsersRound,
+  UserPlus,
   Upload,
-  LucideIcon,
+  Trophy,
+  TrendingUp,
+  BarChart3,
+  Loader2,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useFilter } from "@/context/FilterContext";
 import { api } from "@/services/api";
-import FeatureNotReady from "@/components/common/FeatureNotReady";
-import {
-  format,
-  parseISO,
-  startOfYear,
-  endOfYear,
-  eachMonthOfInterval,
-} from "date-fns";
-import { id as idLocale } from "date-fns/locale";
-import CountUp from "react-countup";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import ChartTooltip from "@/components/common/ChartTooltip";
+import { aggregateByQuarter, formatAxisValue } from "@/utils/chartUtils";
 import {
-  calculateMoMGrowth,
-  calculateBasketSize,
-  aggregateByQuarter,
-  aggregateByDayOfWeek,
-} from "@/utils/chartUtils";
-import { chartColors, chartUI, chartGradients } from "@/config/chartTheme";
+  chartColors,
+  chartUI,
+  chartGradients,
+  chartLayout,
+  chartTypography,
+  chartHeaderIcons,
+  chartContent,
+  chartAnimation,
+} from "@/config/chartTheme";
+import TabToggle from "@/components/ui/TabToggle";
+import {
+  MetricSelector,
+  ChartSkeleton,
+  ChartEmptyState,
+  MetricCard,
+  InsightBanner,
+  MetricCardSkeleton,
+} from "@/components/dashboard";
 
-// === TYPES ===
+// React Query hooks
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { useOverviewChartData } from "@/hooks/useOverviewChartData";
+import {
+  useEnhancedTrendChart,
+  indicatorLabels,
+  indicatorFormats,
+  type TrendIndicator,
+} from "@/hooks/useEnhancedTrendChart";
 
-interface SparklineItem {
-  tanggal: string;
-  total: number;
-}
+// Skeleton components
 
-interface MetricData {
-  current: number;
-  percent: number;
-  trend: string;
-  sparkline: SparklineItem[];
-}
+import DateRangePicker from "@/components/common/DateRangePicker";
+import type {
+  DashboardMetric,
+  SalesDataPoint,
+  OrdersDayDataPoint,
+  StoreItem, // Keep StoreItem just in case used elsewhere, though seemingly not needed directly anymore? Checking usage: getTargetStores is gone.
+} from "@/types/dashboard.types";
+import { semanticStatusThemes } from "@/types/dashboard.types";
+import {
+  staggerContainerVariants,
+  fadeInUpVariants,
+  chartContentVariants,
+} from "@/config/animationConfig";
+import { useOperationalChartData } from "@/hooks/useOperationalChartData";
+import { YoYGrowthChart } from "@/components/dashboard/YoYGrowthChart";
+import {
+  aggregateData,
+  getAutoGranularity,
+  getAvailableGranularities,
+  granularityLabels,
+  type TimeGranularity,
+  type AggregatedDataPoint,
+} from "@/utils/timeAggregation";
 
-interface OverviewMetric {
-  title: string;
-  value: number;
-  format: "currency" | "number" | "percent";
-  trend: string;
-  trendUp: boolean;
-  data: number[];
-  icon: LucideIcon;
-  highlight?: boolean;
-  isDummy: boolean;
-  color: string;
-  suffix?: string;
-}
-
-interface SalesDataPoint {
-  originalDate?: Date;
-  monthKey: string;
-  displayMonth: string;
-  sales: number;
-  orders: number;
-  basketSize: number;
-  salesGrowth?: number;
-  ordersGrowth?: number;
-  basketSizeGrowth?: number;
-}
-
-interface OrdersDayDataPoint {
-  displayMonth: string;
-  orders: number;
-  dayName?: string;
-  avgSales?: number;
-}
-
-interface StoreItem {
-  id?: string | number;
-}
+// Chart data key type (legacy, akan dihapus setelah full migration)
+type ChartDataKey = "sales" | "orders" | "basketSize";
 
 // === MAIN COMPONENT ===
 
 const DashboardOverview: React.FC = () => {
   const { store, stores, dateRange } = useFilter();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
 
-  // Chart state
-  const [activeTab, setActiveTab] = useState("sales");
+  const navigate = useNavigate();
+
+  // React Query hook untuk metrics (replaces 205 baris manual fetch!)
+  const {
+    data: metricsData,
+    isLoading: metricsLoading,
+    error: metricsError,
+  } = useDashboardMetrics();
+
+  // React Query hook untuk chart data (replaces ~100 baris manual fetch!)
+  const {
+    data: chartData,
+    isLoading: chartLoading,
+    error: chartError,
+  } = useOverviewChartData();
+
+  // Enhanced Trend Chart hook (multi-indicator sparklines)
+  const { data: trendData, isLoading: trendLoading } = useEnhancedTrendChart();
+
+  // Chart state - Enhanced
+  const [selectedIndicator, setSelectedIndicator] =
+    useState<TrendIndicator>("sales");
+  const [selectedGranularity, setSelectedGranularity] =
+    useState<TimeGranularity>("monthly");
+
+  // Legacy chart state (untuk backward compatibility)
   const [salesData, setSalesData] = useState<SalesDataPoint[]>([]);
   const [salesViewMode, setSalesViewMode] = useState<"monthly" | "quarterly">(
     "monthly"
   );
-  const [ordersDayData, setOrdersDayData] = useState<OrdersDayDataPoint[]>([]);
-  const [rawMonthlyData, setRawMonthlyData] = useState<SalesDataPoint[]>([]);
-  const [avgMonthlyOrders, setAvgMonthlyOrders] = useState(0);
+  const [activeChartTab, setActiveChartTab] = useState<ChartDataKey>("sales");
+  const [monthlyChartData, setMonthlyChartData] = useState<SalesDataPoint[]>(
+    []
+  );
+
+  // New Hook: Operational Chart Data
+  const { data: ordersDayData = [], isLoading: operationalLoading } =
+    useOperationalChartData();
+
+  // Helper: Cek apakah chart data kosong (semua value = 0)
+  const isSalesDataEmpty = useMemo(() => {
+    if (salesData.length === 0) return true;
+    return salesData.every((d) => d.sales === 0 && d.orders === 0);
+  }, [salesData]);
+
+  const isOrdersDayDataEmpty = useMemo(() => {
+    if (ordersDayData.length === 0) return true;
+    return ordersDayData.every((d) => d.orders === 0);
+  }, [ordersDayData]);
+
+  // Enhanced: Get aggregated trend data berdasarkan selected indicator dan granularity
+  const aggregatedTrendData = useMemo((): AggregatedDataPoint[] => {
+    if (!trendData) return [];
+    const rawData = trendData[selectedIndicator] || [];
+
+    // Determine aggregation type: "average" for rates/sizes, "sum" for totals
+    const aggType = ["conversionRate", "basketSize"].includes(selectedIndicator)
+      ? "average"
+      : "sum";
+
+    // Fix: Pass start and end date for zero-filling continuous time series, and aggregation type
+    return aggregateData(
+      rawData,
+      selectedGranularity,
+      dateRange.startDate || new Date(),
+      dateRange.endDate || new Date(),
+      aggType
+    );
+  }, [trendData, selectedIndicator, selectedGranularity, dateRange]);
+
+  // Enhanced: Check if trend data is empty (all zeros)
+  const isTrendDataEmpty = useMemo(() => {
+    if (trendLoading || !trendData) return true;
+    const rawData = trendData[selectedIndicator] || [];
+    if (rawData.length === 0) return true;
+    return rawData.every((d) => d.total === 0);
+  }, [trendLoading, trendData, selectedIndicator]);
+
+  // Enhanced: Get available granularity options berdasarkan date range
+  const availableGranularities = useMemo((): TimeGranularity[] => {
+    if (!dateRange?.startDate || !dateRange?.endDate) return ["monthly"];
+    return getAvailableGranularities(
+      new Date(dateRange.startDate),
+      new Date(dateRange.endDate)
+    );
+  }, [dateRange]);
+
+  // Enhanced: Auto-detect granularity saat date range berubah
+  useEffect(() => {
+    if (dateRange?.startDate && dateRange?.endDate) {
+      const autoGranularity = getAutoGranularity(
+        new Date(dateRange.startDate),
+        new Date(dateRange.endDate)
+      );
+      // Hanya auto-set jika granularity sekarang tidak available
+      if (!availableGranularities.includes(selectedGranularity)) {
+        setSelectedGranularity(autoGranularity);
+      }
+    }
+  }, [dateRange, availableGranularities, selectedGranularity]);
 
   // Metrics state
-  const [metrics, setMetrics] = useState<OverviewMetric[]>([
+  const [metrics, setMetrics] = useState<DashboardMetric[]>([
     {
       title: "Total Penjualan",
       value: 0,
@@ -138,10 +227,10 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: DollarSign,
-      highlight: true,
+      icon: Banknote,
+      highlight: false, // Unified glass - no solid highlight
       isDummy: false,
-      color: "orange",
+      color: "orange", // Primary KPI accent
     },
     {
       title: "Total Pesanan",
@@ -150,7 +239,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingBag,
+      icon: ShoppingCart,
       isDummy: false,
       color: "blue",
     },
@@ -161,7 +250,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: false,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: MousePointer,
+      icon: Percent,
       isDummy: false,
       color: "purple",
     },
@@ -172,7 +261,7 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingBag,
+      icon: ShoppingBasket,
       isDummy: false,
       color: "emerald",
     },
@@ -183,415 +272,178 @@ const DashboardOverview: React.FC = () => {
       trend: "0%",
       trendUp: false,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Users,
+      icon: UsersRound,
       isDummy: false,
       color: "cyan",
     },
     {
-      title: "Produk Terjual",
+      title: "Pembeli Baru",
       value: 0,
       format: "number",
       trend: "0%",
       trendUp: true,
       data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Package,
-      isDummy: true,
+      icon: UserPlus,
+      isDummy: true, // API endpoint belum tersedia
       color: "pink",
     },
   ]);
 
-  // Helper: merge sparklines untuk multi-store
-  const mergeSparklines = (
-    base: SparklineItem[],
-    incoming: SparklineItem[]
-  ): SparklineItem[] => {
-    if (!incoming || incoming.length === 0) return base;
-    if (!base || base.length === 0) return incoming.map((i) => ({ ...i }));
-    const incomingMap = new Map(incoming.map((i) => [i.tanggal, i]));
-    return base.map((b) => {
-      const inc = incomingMap.get(b.tanggal) || {
-        total: 0,
-        tanggal: b.tanggal,
-      };
-      return { ...b, total: Number(b.total) + Number(inc.total) };
+  // Update metrics state when metricsData changes
+  useEffect(() => {
+    if (!metricsData) return;
+
+    // Helper removed: Logic dipindah ke dashboardHelpers.ts (Zero Placeholder Strategy)
+
+    setMetrics((prev) => {
+      const newMetrics = [...prev];
+
+      // Update dari metricsData (React Query result)
+      if (metricsData.sales) {
+        newMetrics[0] = {
+          ...newMetrics[0],
+          value: metricsData.sales.current,
+          previousValue: metricsData.sales.previous,
+          trend: `${metricsData.sales.percent?.toFixed(1) || 0}%`,
+          trendUp: (metricsData.sales.percent || 0) >= 0,
+          data: metricsData.sales.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+          isDummy: false,
+        };
+      }
+
+      if (metricsData.orders) {
+        newMetrics[1] = {
+          ...newMetrics[1],
+          value: metricsData.orders.current,
+          previousValue: metricsData.orders.previous,
+          trend: `${metricsData.orders.percent?.toFixed(1) || 0}%`,
+          trendUp: (metricsData.orders.percent || 0) >= 0,
+          data: metricsData.orders.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+          isDummy: false,
+        };
+      }
+
+      if (metricsData.cr) {
+        newMetrics[2] = {
+          ...newMetrics[2],
+          value: metricsData.cr.current,
+          previousValue: metricsData.cr.previous,
+          trend: `${metricsData.cr.percent?.toFixed(1) || 0}%`,
+          trendUp: (metricsData.cr.percent || 0) >= 0,
+          // Fix: Map sparkline data correctly instead of hardcoded 0s
+          data: metricsData.cr.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+          isDummy: false,
+        };
+      }
+
+      if (metricsData.bs) {
+        newMetrics[3] = {
+          ...newMetrics[3],
+          value: metricsData.bs.current,
+          previousValue: metricsData.bs.previous,
+          trend: `${metricsData.bs.percent?.toFixed(1) || 0}%`,
+          trendUp: (metricsData.bs.percent || 0) >= 0,
+          // Fix: Map sparkline data correctly
+          data: metricsData.bs.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+          isDummy: false,
+        };
+      }
+
+      if (metricsData.visitors) {
+        newMetrics[4] = {
+          ...newMetrics[4],
+          value: metricsData.visitors.current,
+          previousValue: metricsData.visitors.previous,
+          trend: `${metricsData.visitors.percent?.toFixed(1) || 0}%`,
+          trendUp: (metricsData.visitors.percent || 0) >= 0,
+          data: metricsData.visitors.sparkline?.map((d) => Number(d.total)) || [
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+          isDummy: false,
+        };
+      }
+
+      return newMetrics;
     });
-  };
+  }, [metricsData, dateRange]);
 
-  // 1. Fetch METRICS Data
+  // Error handling untuk metrics
   useEffect(() => {
-    const loadMetrics = async () => {
-      setLoading(true);
-      try {
-        const fromDate = dateRange?.startDate
-          ? format(dateRange.startDate, "yyyy-MM-dd")
-          : "";
-        const toDate = dateRange?.endDate
-          ? format(dateRange.endDate, "yyyy-MM-dd")
-          : "";
-
-        let targetStores: StoreItem[] = [];
-        if (store === "all") {
-          targetStores = stores.filter((s: StoreItem) => s && s.id);
-        } else {
-          targetStores = [{ id: store }];
-        }
-
-        if (targetStores.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const fetchStoreMetrics = async (id: string | number) => {
-          const payload = {
-            store_id: id,
-            date_from: fromDate,
-            date_to: toDate,
-          };
-          const [salesRes, ordersRes, visitorsRes, crRes, bsRes] =
-            await Promise.all([
-              api.dashboard.totalPenjualan(payload),
-              api.dashboard.totalPesanan(payload),
-              api.dashboard.totalPengunjung(payload),
-              api.dashboard.conversionRate(payload),
-              api.dashboard.basketSize(payload),
-            ]);
-
-          const extract = (res: any): MetricData => ({
-            current: Number(res.data?.data?.total || 0),
-            percent: Number(res.data?.data?.percent || 0),
-            trend: res.data?.data?.trend || "Equal",
-            sparkline: res.data?.data?.sparkline || [],
-          });
-
-          return {
-            sales: extract(salesRes),
-            orders: extract(ordersRes),
-            visitors: extract(visitorsRes),
-            cr: extract(crRes),
-            bs: extract(bsRes),
-          };
-        };
-
-        if (store !== "all" && targetStores.length === 1) {
-          const res = await fetchStoreMetrics(targetStores[0].id!);
-          setMetrics((prev) => {
-            const newMetrics = [...prev];
-            const update = (
-              idx: number,
-              dataObj: MetricData,
-              fmt: "currency" | "number" | "percent",
-              isDummy = false
-            ) => {
-              newMetrics[idx] = {
-                ...newMetrics[idx],
-                value: dataObj.current,
-                format: fmt,
-                trend: isDummy ? "0%" : `${dataObj.percent.toFixed(1)}%`,
-                trendUp: dataObj.percent >= 0,
-                data:
-                  dataObj.sparkline.length > 0
-                    ? dataObj.sparkline.map((d) => Number(d.total))
-                    : [0, 0, 0, 0, 0, 0, 0],
-                isDummy,
-              };
-            };
-            update(0, res.sales, "currency");
-            update(1, res.orders, "number");
-            update(2, res.cr, "percent");
-            update(3, res.bs, "currency");
-            update(4, res.visitors, "number");
-            return newMetrics;
-          });
-        } else {
-          // Multi-store aggregation
-          const results = await Promise.all(
-            targetStores.map((s) => fetchStoreMetrics(s.id!))
-          );
-
-          let aggSales: MetricData = {
-            current: 0,
-            percent: 0,
-            trend: "",
-            sparkline: [],
-          };
-          let aggOrders: MetricData = {
-            current: 0,
-            percent: 0,
-            trend: "",
-            sparkline: [],
-          };
-          let aggVisitors: MetricData = {
-            current: 0,
-            percent: 0,
-            trend: "",
-            sparkline: [],
-          };
-          let aggCR: MetricData = {
-            current: 0,
-            percent: 0,
-            trend: "",
-            sparkline: [],
-          };
-          let aggBS: MetricData = {
-            current: 0,
-            percent: 0,
-            trend: "",
-            sparkline: [],
-          };
-
-          results.forEach((res, idx) => {
-            aggSales.current += res.sales.current;
-            aggOrders.current += res.orders.current;
-            aggVisitors.current += res.visitors.current;
-
-            if (idx === 0) {
-              aggSales.sparkline = res.sales.sparkline;
-              aggOrders.sparkline = res.orders.sparkline;
-              aggVisitors.sparkline = res.visitors.sparkline;
-            } else {
-              aggSales.sparkline = mergeSparklines(
-                aggSales.sparkline,
-                res.sales.sparkline
-              );
-              aggOrders.sparkline = mergeSparklines(
-                aggOrders.sparkline,
-                res.orders.sparkline
-              );
-              aggVisitors.sparkline = mergeSparklines(
-                aggVisitors.sparkline,
-                res.visitors.sparkline
-              );
-            }
-          });
-
-          aggBS.current =
-            aggOrders.current > 0 ? aggSales.current / aggOrders.current : 0;
-          aggCR.current =
-            aggVisitors.current > 0
-              ? (aggOrders.current / aggVisitors.current) * 100
-              : 0;
-
-          setMetrics((prev) => {
-            const newMetrics = [...prev];
-            const update = (
-              idx: number,
-              dataObj: MetricData,
-              fmt: "currency" | "number" | "percent"
-            ) => {
-              newMetrics[idx] = {
-                ...newMetrics[idx],
-                value: dataObj.current,
-                format: fmt,
-                trend: "0%",
-                trendUp: true,
-                data:
-                  dataObj.sparkline.length > 0
-                    ? dataObj.sparkline.map((d) => Number(d.total))
-                    : [0, 0, 0, 0, 0, 0, 0],
-                isDummy: false,
-              };
-            };
-            update(0, aggSales, "currency");
-            update(1, aggOrders, "number");
-            update(2, aggCR, "percent");
-            update(3, aggBS, "currency");
-            update(4, aggVisitors, "number");
-            return newMetrics;
-          });
-        }
-      } catch (error) {
-        console.error("Overview Metrics Fetch Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (dateRange?.startDate) loadMetrics();
-  }, [store, stores, dateRange]);
-
-  // 2. Fetch CHART Data (Full Year)
+    if (metricsError) {
+      toast.error("Gagal memuat data metrik. Silakan coba lagi.", {
+        duration: 4000,
+        position: "top-right",
+      });
+    }
+  }, [metricsError]);
+  // Error handling untuk charts
   useEffect(() => {
-    const loadChartData = async () => {
-      const targetDate = dateRange?.endDate || new Date();
-      const startOfYearDate = format(startOfYear(targetDate), "yyyy-MM-dd");
-      const endOfYearDate = format(endOfYear(targetDate), "yyyy-MM-dd");
+    if (chartError) {
+      toast.error("Gagal memuat data chart. Silakan coba lagi.", {
+        duration: 4000,
+        position: "top-right",
+      });
+    }
+  }, [chartError]);
 
-      const monthsSkeleton: SalesDataPoint[] = eachMonthOfInterval({
-        start: startOfYear(targetDate),
-        end: endOfYear(targetDate),
-      }).map((date) => ({
-        originalDate: date,
-        monthKey: format(date, "MMM yyyy", { locale: idLocale }),
-        displayMonth: format(date, "MMM", { locale: idLocale }),
-        sales: 0,
-        orders: 0,
-        basketSize: 0,
-      }));
-
-      let targetStores: StoreItem[] = [];
-      if (store === "all") {
-        targetStores = stores.filter((s: StoreItem) => s && s.id);
-      } else {
-        targetStores = [{ id: store }];
-      }
-
-      if (targetStores.length === 0) return;
-
-      const fetchStoreChart = async (id: string | number) => {
-        const payload = {
-          store_id: id,
-          date_from: startOfYearDate,
-          date_to: endOfYearDate,
-        };
-        const [salesRes, ordersRes] = await Promise.all([
-          api.dashboard.totalPenjualan(payload),
-          api.dashboard.totalPesanan(payload),
-        ]);
-        return {
-          sales: salesRes.data?.data?.sparkline || [],
-          orders: ordersRes.data?.data?.sparkline || [],
-        };
-      };
-
-      try {
-        const results = await Promise.all(
-          targetStores.map((s) => fetchStoreChart(s.id!))
-        );
-
-        results.forEach((res) => {
-          res.sales.forEach((item: SparklineItem) => {
-            const date = parseISO(item.tanggal);
-            const monthKey = format(date, "MMM yyyy", { locale: idLocale });
-            const monthIndex = monthsSkeleton.findIndex(
-              (m) => m.monthKey === monthKey
-            );
-            if (monthIndex !== -1)
-              monthsSkeleton[monthIndex].sales += Number(item.total);
-          });
-
-          res.orders.forEach((item: SparklineItem) => {
-            const date = parseISO(item.tanggal);
-            const monthKey = format(date, "MMM yyyy", { locale: idLocale });
-            const monthIndex = monthsSkeleton.findIndex(
-              (m) => m.monthKey === monthKey
-            );
-            if (monthIndex !== -1)
-              monthsSkeleton[monthIndex].orders += Number(item.total);
-          });
-        });
-
-        const processedSkeleton = monthsSkeleton.map((m) => ({
-          ...m,
-          basketSize: calculateBasketSize(m.sales, m.orders),
-        }));
-
-        const finalData = calculateMoMGrowth(processedSkeleton, [
-          "sales",
-          "orders",
-          "basketSize",
-        ]);
-        setRawMonthlyData(finalData);
-        setSalesData(finalData);
-
-        // Aggregate orders by day of week
-        let allDailyOrders: SparklineItem[] = [];
-        results.forEach((res) => {
-          if (res.orders && res.orders.length > 0) {
-            allDailyOrders = [...allDailyOrders, ...res.orders];
-          }
-        });
-        const dayOfWeekData = aggregateByDayOfWeek(allDailyOrders);
-        setOrdersDayData(dayOfWeekData);
-
-        const totalOrders = finalData.reduce(
-          (acc, curr) => acc + curr.orders,
-          0
-        );
-        setAvgMonthlyOrders(Math.round(totalOrders / 12));
-      } catch (error) {
-        console.error("Chart Data Fetch Error:", error);
-      }
-    };
-
-    if (stores.length > 0) loadChartData();
-  }, [store, stores, dateRange?.endDate]);
-
-  // 3. Fetch Operational Data (follows filter)
+  // Update chart state dari React Query hook data
   useEffect(() => {
-    const loadOperationalData = async () => {
-      const fromDate = dateRange?.startDate
-        ? format(dateRange.startDate, "yyyy-MM-dd")
-        : "";
-      const toDate = dateRange?.endDate
-        ? format(dateRange.endDate, "yyyy-MM-dd")
-        : "";
-      if (!fromDate || !toDate) return;
+    // Jika chartData undefined (masih loading), jangan update state dulu
+    if (chartData === undefined) {
+      return;
+    }
 
-      let targetStores: StoreItem[] = [];
-      if (store === "all") {
-        targetStores = stores.filter((s: StoreItem) => s && s.id);
-      } else {
-        targetStores = [{ id: store }];
-      }
-
-      if (targetStores.length === 0) return;
-
-      try {
-        const results = await Promise.all(
-          targetStores.map(async (s) => {
-            const payload = {
-              store_id: s.id!,
-              date_from: fromDate,
-              date_to: toDate,
-            };
-            const ordersRes = await api.dashboard.totalPesanan(payload);
-            return ordersRes.data?.data?.sparkline || [];
-          })
-        );
-
-        let allDailyOrders: SparklineItem[] = [];
-        results.forEach((sparkline) => {
-          if (sparkline && sparkline.length > 0)
-            allDailyOrders = [...allDailyOrders, ...sparkline];
-        });
-
-        const dayOfWeekData = aggregateByDayOfWeek(allDailyOrders);
-        setOrdersDayData(dayOfWeekData);
-      } catch (error) {
-        console.error("Operational Chart Fetch Error:", error);
-      }
-    };
-
-    if (stores.length > 0 && dateRange?.startDate) loadOperationalData();
-  }, [store, stores, dateRange]);
+    // Set data (bisa kosong atau berisi) - penting untuk Empty State!
+    setMonthlyChartData(chartData);
+    setSalesData(chartData);
+  }, [chartData]);
 
   // 4. Handle Sales View Mode Toggle
   useEffect(() => {
-    if (rawMonthlyData.length === 0) return;
+    if (monthlyChartData.length === 0) return;
     if (salesViewMode === "quarterly") {
-      const quarterlyData = aggregateByQuarter(rawMonthlyData);
+      const quarterlyData = aggregateByQuarter(monthlyChartData);
       setSalesData(quarterlyData);
     } else {
-      setSalesData(rawMonthlyData);
+      setSalesData(monthlyChartData);
     }
-  }, [salesViewMode, rawMonthlyData]);
+  }, [salesViewMode, monthlyChartData]);
 
   return (
-    <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in pb-4">
+    <motion.div
+      className="flex flex-col h-full gap-4 overflow-hidden pb-4"
+      variants={staggerContainerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
       <div className="flex items-center justify-between flex-none pt-1">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            Dashboard Tinjauan
+            Tinjauan Bisnis
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Ringkasan performa toko Anda
+            Pantau kesehatan dan pertumbuhan toko secara komprehensif.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Filter Tanggal */}
+          <DateRangePicker
+            minDate={new Date(2024, 0, 1)}
+            maxDate={new Date()}
+          />
+
           <button
             onClick={() => navigate("/upload")}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
           >
             <Upload size={18} strokeWidth={2.5} />
             <span className="font-bold text-sm">Upload Data</span>
@@ -599,368 +451,378 @@ const DashboardOverview: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Insight Banner */}
+      {/* Quick Insight Banner */}
+      <motion.div variants={fadeInUpVariants}>
+        <InsightBanner metrics={metrics} loading={metricsLoading} />
+      </motion.div>
+
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-none">
-        {metrics.map((metric, index) => (
-          <MetricCard key={index} metric={metric} />
-        ))}
-      </div>
-
-      {/* Charts Area */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main Chart - Analisa Tren */}
-        <div className="lg:col-span-2 h-full min-h-0">
-          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
-            <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg font-bold">
-                  Analisa Tren
-                </CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Tren penjualan, jumlah order, dan pertumbuhan
-                </p>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
-                <button
-                  onClick={() => setSalesViewMode("monthly")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                    salesViewMode === "monthly"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  }`}
-                >
-                  Bulanan
-                </button>
-                <button
-                  onClick={() => setSalesViewMode("quarterly")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                    salesViewMode === "quarterly"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  }`}
-                >
-                  Kuartal
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={salesData}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset={chartGradients.primary.start.offset}
-                        stopColor={chartGradients.primary.start.color}
-                        stopOpacity={chartGradients.primary.start.opacity}
-                      />
-                      <stop
-                        offset={chartGradients.primary.end.offset}
-                        stopColor={chartGradients.primary.end.color}
-                        stopOpacity={chartGradients.primary.end.opacity}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    opacity={0.1}
-                  />
-                  <XAxis
-                    dataKey="displayMonth"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                    dy={10}
-                    interval={0}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(val) => {
-                      if (val >= 1000000000)
-                        return `${(val / 1000000000).toFixed(1)}M`;
-                      if (val >= 1000000)
-                        return `${(val / 1000000).toFixed(0)}jt`;
-                      if (val >= 1000) return `${(val / 1000).toFixed(0)}rb`;
-                      return val;
-                    }}
-                    tick={{ fontSize: 10 }}
-                  />
-                  <Tooltip
-                    content={<ChartTooltip type="auto" />}
-                    cursor={{ stroke: chartUI.cursor.stroke }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="sales"
-                    name="Total Penjualan"
-                    stroke={chartColors.primary}
-                    fill="url(#colorSales)"
-                    strokeWidth={3}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="orders"
-                    name="Total Pesanan"
-                    stroke="transparent"
-                    fill="transparent"
-                    strokeWidth={0}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="basketSize"
-                    name="Basket Size"
-                    stroke="transparent"
-                    fill="transparent"
-                    strokeWidth={0}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Side Chart - Analisa Operasional */}
-        <div className="h-full min-h-0">
-          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
-            <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
-              <CardTitle className="text-lg font-bold">
-                Analisa Operasional
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Rata-rata pesanan per hari (sesuai filter)
-              </p>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={ordersDayData}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    opacity={0.1}
-                  />
-                  <XAxis
-                    dataKey="displayMonth"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                    dy={10}
-                    interval={0}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10 }}
-                  />
-                  <Tooltip
-                    content={<ChartTooltip type="dayOfWeek" />}
-                    cursor={{ fill: chartUI.cursor.fill }}
-                  />
-                  <Bar
-                    dataKey="orders"
-                    name="Rata-rata Pesanan"
-                    fill={chartColors.secondary}
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// === METRIC CARD COMPONENT ===
-
-interface MetricCardProps {
-  metric: OverviewMetric;
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({ metric }) => {
-  const colorThemes: Record<
-    string,
-    { iconBg: string; iconText: string; accent: string; accentClass: string }
-  > = {
-    blue: {
-      iconBg: "bg-gradient-to-br from-blue-500 to-indigo-500",
-      iconText: "text-white",
-      accent: "#3b82f6",
-      accentClass: "from-blue-500 to-blue-500/80",
-    },
-    emerald: {
-      iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
-      iconText: "text-white",
-      accent: "#10b981",
-      accentClass: "from-emerald-500 to-emerald-500/80",
-    },
-    purple: {
-      iconBg: "bg-gradient-to-br from-purple-500 to-violet-500",
-      iconText: "text-white",
-      accent: "#a855f7",
-      accentClass: "from-purple-500 to-purple-500/80",
-    },
-    orange: {
-      iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
-      iconText: "text-white",
-      accent: "#f97316",
-      accentClass: "from-orange-500 to-orange-500/80",
-    },
-    cyan: {
-      iconBg: "bg-gradient-to-br from-cyan-500 to-sky-500",
-      iconText: "text-white",
-      accent: "#06b6d4",
-      accentClass: "from-cyan-500 to-cyan-500/80",
-    },
-    green: {
-      iconBg: "bg-gradient-to-br from-green-500 to-emerald-600",
-      iconText: "text-white",
-      accent: "#22c55e",
-      accentClass: "from-green-500 to-green-500/80",
-    },
-    pink: {
-      iconBg: "bg-gradient-to-br from-pink-500 to-rose-500",
-      iconText: "text-white",
-      accent: "#ec4899",
-      accentClass: "from-pink-500 to-pink-500/80",
-    },
-  };
-  const theme = colorThemes[metric.color] || colorThemes.blue;
-
-  const highlightThemes: Record<string, string> = {
-    blue: "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 shadow-blue-500/40",
-    orange:
-      "bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 shadow-orange-500/40",
-    purple:
-      "bg-gradient-to-br from-purple-600 via-purple-700 to-fuchsia-800 shadow-purple-500/40",
-  };
-  const highlightClass = metric.highlight
-    ? `${
-        highlightThemes[metric.color] || highlightThemes.blue
-      } text-white border-transparent shadow-2xl ring-1 ring-white/20`
-    : "glass-card hover:shadow-2xl";
-
-  return (
-    <div className="h-full">
-      <FeatureNotReady
-        blur={metric.isDummy}
-        overlay={metric.isDummy}
-        message="Segera Hadir"
+      {/* Metrics Row */}
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 flex-none"
+        variants={fadeInUpVariants}
       >
-        <Card
-          className={`relative overflow-hidden h-full transition-all duration-300 hover:scale-[1.02] rounded-2xl ${highlightClass}`}
-        >
-          {!metric.highlight && (
-            <div
-              className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-gradient-to-b ${theme.accentClass}`}
-            />
-          )}
-          <div className="absolute -bottom-3 -right-3 opacity-[0.08] rotate-12 pointer-events-none">
-            <metric.icon size={64} />
-          </div>
-          <div className="relative z-10 p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div
-                className={`p-2.5 rounded-xl shadow-lg ${
-                  metric.highlight
-                    ? "bg-white/20 text-white shadow-white/10"
-                    : `${theme.iconBg} ${theme.iconText} shadow-${metric.color}-500/30`
-                }`}
-              >
-                <metric.icon size={18} strokeWidth={2.5} />
-              </div>
-              <h3
-                className={`text-xs font-semibold leading-tight ${
-                  metric.highlight ? "text-white/90" : "text-muted-foreground"
-                }`}
-              >
-                {metric.title}
-              </h3>
-            </div>
-            <p
-              className={`text-2xl font-extrabold tracking-tight mb-2 ${
-                metric.highlight ? "text-white" : "text-foreground"
-              }`}
-            >
-              <CountUp
-                start={0}
-                end={metric.value}
-                duration={2.0}
-                separator="."
-                decimal=","
-                decimals={
-                  metric.format === "currency"
-                    ? 0
-                    : metric.format === "number" && metric.value % 1 !== 0
-                    ? 2
-                    : 0
-                }
-                prefix={metric.format === "currency" ? "Rp" : ""}
-                suffix={metric.format === "percent" ? "%" : metric.suffix || ""}
+        {metricsLoading
+          ? // Skeleton loading state
+            Array.from({ length: 6 }).map((_, index) => (
+              <MetricCardSkeleton key={index} />
+            ))
+          : // Actual metrics cards
+            metrics.map((metric, index) => (
+              <MetricCard
+                key={index}
+                metric={metric}
+                loading={metricsLoading}
+                staggerIndex={index}
               />
-            </p>
-            <div className="flex items-center justify-between">
-              <span
-                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                  metric.highlight
-                    ? "bg-white/20 text-white"
-                    : metric.trendUp
-                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
-                }`}
-              >
-                {metric.trendUp ? "↑" : "↓"} {metric.trend}
-              </span>
-              <div className="w-16 h-8">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={metric.data.map((v, i) => ({ i, v }))}>
-                    <defs>
-                      <linearGradient
-                        id={`grad-${metric.color}`}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="0%"
-                          stopColor={
-                            metric.highlight ? "#ffffff" : theme.accent
-                          }
-                          stopOpacity={0.5}
-                        />
-                        <stop
-                          offset="100%"
-                          stopColor={
-                            metric.highlight ? "#ffffff" : theme.accent
-                          }
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke={metric.highlight ? "#ffffff" : theme.accent}
-                      fill={`url(#grad-${metric.color})`}
-                      strokeWidth={2}
+            ))}
+      </motion.div>
+
+      {/* Charts Area - Left/Right Split Layout */}
+      <motion.div
+        className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0"
+        variants={staggerContainerVariants}
+      >
+        {/* LEFT: Analisa Tren (2/3 width, full height) */}
+        <motion.div
+          className="lg:col-span-2 h-full min-h-0"
+          variants={fadeInUpVariants}
+        >
+          {chartLoading ? (
+            <ChartSkeleton />
+          ) : (
+            <Card className="glass-card rounded-2xl h-full flex flex-col">
+              <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle
+                      className={`${chartTypography.titleLarge} flex items-center gap-2`}
+                    >
+                      <TrendingUp className={chartHeaderIcons.large} />
+                      {chartContent.tren.title}
+                    </CardTitle>
+                    <p className={`${chartTypography.subtitle} mt-1`}>
+                      {selectedIndicator === "sales" && "Tren total penjualan"}
+                      {selectedIndicator === "orders" && "Tren jumlah pesanan"}
+                      {selectedIndicator === "visitors" &&
+                        "Tren total pengunjung"}
+                      {selectedIndicator === "conversionRate" &&
+                        "Tren conversion rate"}
+                      {selectedIndicator === "basketSize" &&
+                        "Tren rata-rata nilai keranjang"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Indicator Dropdown */}
+                    {/* Indicator Dropdown */}
+                    <MetricSelector
+                      value={selectedIndicator}
+                      onValueChange={(value) => setSelectedIndicator(value)}
                     />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </FeatureNotReady>
-    </div>
+
+                    {/* Granularity Toggle */}
+                    {/* Granularity Toggle */}
+                    <TabToggle
+                      items={availableGranularities.map((gran) => ({
+                        value: gran,
+                        label: granularityLabels[gran],
+                      }))}
+                      activeValue={selectedGranularity}
+                      onChange={(value) => setSelectedGranularity(value as any)}
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 pt-4 pb-6 px-6">
+                <AnimatePresence mode="wait">
+                  {trendLoading || isTrendDataEmpty ? (
+                    <motion.div
+                      key="empty"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
+                    >
+                      {trendLoading ? (
+                        <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <span className="text-xs font-medium">
+                            Memuat grafik...
+                          </span>
+                        </div>
+                      ) : (
+                        <ChartEmptyState
+                          title="Data Tren Belum Tersedia"
+                          message="Upload data untuk melihat grafik tren."
+                        />
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={`${selectedIndicator}-${selectedGranularity}`}
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full w-full"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={aggregatedTrendData}
+                          margin={chartLayout.large.margin}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="colorSales"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset={chartGradients.primary.start.offset}
+                                stopColor={chartGradients.primary.start.color}
+                                stopOpacity={
+                                  chartGradients.primary.start.opacity
+                                }
+                              />
+                              <stop
+                                offset={chartGradients.primary.end.offset}
+                                stopColor={chartGradients.primary.end.color}
+                                stopOpacity={chartGradients.primary.end.opacity}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray={
+                              chartUI.cartesianGrid.strokeDasharray
+                            }
+                            vertical={chartUI.cartesianGrid.vertical}
+                            opacity={chartUI.cartesianGrid.opacity}
+                          />
+                          <XAxis
+                            dataKey="key"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={chartTypography.axisLabel}
+                            tickMargin={10}
+                            dy={10}
+                            interval={
+                              // Smart interval: tampilkan semua jika sedikit, atau hitung interval agar ~10-12 label tampil
+                              aggregatedTrendData.length <= 12
+                                ? 0 // Tampilkan semua
+                                : Math.ceil(aggregatedTrendData.length / 10) - 1 // Tampilkan ~10 label
+                            }
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatAxisValue}
+                            tick={chartTypography.axisLabel}
+                            tickMargin={8}
+                            width={chartLayout.large.yAxisWidth}
+                          />
+                          <Tooltip
+                            content={<ChartTooltip type="auto" />}
+                            cursor={{ stroke: chartUI.cursor.stroke }}
+                          />
+                          {/* Dynamic Area based on selectedIndicator */}
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            name={indicatorLabels[selectedIndicator]}
+                            stroke={chartColors.primary}
+                            fill="url(#colorSales)"
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            animationDuration={chartAnimation.duration}
+                            animationEasing={chartAnimation.easing}
+                            activeDot={{
+                              r: chartUI.activeDot.r,
+                              fill: chartUI.activeDot.fill,
+                              stroke: chartUI.activeDot.stroke,
+                              strokeWidth: chartUI.activeDot.strokeWidth,
+                              style: { filter: chartUI.activeDot.filter },
+                            }}
+                          />
+                          {/* Hidden areas for tooltip data */}
+                          {activeChartTab !== "sales" && (
+                            <Area
+                              type="monotone"
+                              dataKey="sales"
+                              name="Total Penjualan"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                          {activeChartTab !== "orders" && (
+                            <Area
+                              type="monotone"
+                              dataKey="orders"
+                              name="Total Pesanan"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                          {activeChartTab !== "basketSize" && (
+                            <Area
+                              type="monotone"
+                              dataKey="basketSize"
+                              name="Basket Size"
+                              stroke="transparent"
+                              fill="transparent"
+                              strokeWidth={0}
+                            />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+
+        {/* RIGHT: Stacked Charts (1/3 width) */}
+        <motion.div
+          className="flex flex-col gap-4 h-full min-h-0"
+          variants={staggerContainerVariants}
+        >
+          {/* YoY Growth Chart (atas) */}
+          <motion.div className="flex-1 min-h-0" variants={fadeInUpVariants}>
+            <YoYGrowthChart />
+          </motion.div>
+
+          {/* Analisa Operasional (bawah) */}
+          <motion.div className="flex-1 min-h-0" variants={fadeInUpVariants}>
+            {chartLoading ? (
+              <ChartSkeleton />
+            ) : (
+              <Card className="glass-card h-full flex flex-col">
+                <CardHeader className="py-4 px-6 flex-none border-b border-black/5 dark:border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <CardTitle
+                        className={`${chartTypography.titleCompact} flex items-center gap-2`}
+                      >
+                        <BarChart3 className={chartHeaderIcons.compact} />
+                        {chartContent.operasional.title}
+                      </CardTitle>
+                      <p className={`${chartTypography.subtitleCompact}`}>
+                        {chartContent.operasional.subtitle}
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 pt-4 pb-6 px-6">
+                  <AnimatePresence mode="wait">
+                    {operationalLoading || isOrdersDayDataEmpty ? (
+                      <motion.div
+                        key="empty-ops"
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full"
+                      >
+                        {operationalLoading ? (
+                          <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            <span className="text-xs font-medium">
+                              Memuat grafik...
+                            </span>
+                          </div>
+                        ) : (
+                          <ChartEmptyState
+                            icon={BarChart3}
+                            title="Data Operasional Belum Tersedia"
+                            message="Upload data untuk melihat pola harian."
+                          />
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="ops-chart"
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full w-full"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={ordersDayData}
+                            margin={chartLayout.compact.margin}
+                          >
+                            <CartesianGrid
+                              strokeDasharray={
+                                chartUI.cartesianGrid.strokeDasharray
+                              }
+                              vertical={chartUI.cartesianGrid.vertical}
+                              opacity={chartUI.cartesianGrid.opacity}
+                            />
+                            <XAxis
+                              dataKey="dayLabel"
+                              axisLine={false}
+                              tickLine={false}
+                              tick={chartTypography.axisLabel}
+                              dy={10}
+                              interval={0}
+                            />
+                            <YAxis
+                              axisLine={false}
+                              tickLine={false}
+                              tick={chartTypography.axisLabel}
+                              width={chartLayout.compact.yAxisWidth}
+                            />
+                            <Tooltip
+                              content={<ChartTooltip type="dayOfWeek" />}
+                              cursor={{ fill: chartUI.cursor.fill }}
+                            />
+                            <Bar
+                              dataKey="orders"
+                              name="Total Pesanan"
+                              radius={chartUI.barRadius.top}
+                              animationDuration={chartAnimation.duration}
+                              animationEasing={chartAnimation.easing}
+                            >
+                              {ordersDayData.map((entry, index) => {
+                                const maxOrders = Math.max(
+                                  ...ordersDayData.map((d) => d.orders)
+                                );
+                                const isBestDay =
+                                  entry.orders === maxOrders &&
+                                  entry.orders > 0;
+                                return (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={
+                                      isBestDay
+                                        ? chartColors.primary
+                                        : chartColors.secondary
+                                    }
+                                  />
+                                );
+                              })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
-
 export default DashboardOverview;

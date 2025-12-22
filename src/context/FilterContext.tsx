@@ -18,6 +18,13 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
+import {
+  subDays,
+  startOfMonth,
+  startOfYear,
+  subMonths,
+  endOfMonth,
+} from "date-fns";
 import { api } from "@/services/api";
 import { useAuth } from "./AuthContext";
 import type { Store } from "@/types";
@@ -68,25 +75,69 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   const [platform, setPlatform] = useState("shopee"); // 'shopee', 'tiktok-tokopedia', 'all'
   const [store, setStore] = useState("all"); // 'all' or specific store ID
   const [stores, setStores] = useState<Store[]>([]); // List of stores
-  const [dateRange, setDateRange] = useState<DateRangeState>({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30)), // Default last 30 days
-    endDate: new Date(),
-    label: "30 Hari Terakhir",
+  // Helper to calculate date range based on label
+  const calculateDateRangeFromLabel = (label: string): DateRangeState => {
+    const today = new Date();
+    // Reset hours to avoid drift
+    today.setHours(23, 59, 59, 999);
+
+    let start = new Date();
+    let end = today;
+
+    if (label === "Hari Ini") {
+      start = new Date();
+      start.setHours(0, 0, 0, 0);
+    } else if (label === "Kemarin") {
+      start = subDays(today, 1);
+      start.setHours(0, 0, 0, 0);
+      end = subDays(today, 1);
+      end.setHours(23, 59, 59, 999);
+    } else if (label === "7 Hari Terakhir") {
+      start = subDays(today, 6); // Includes today
+      start.setHours(0, 0, 0, 0);
+    } else if (label === "30 Hari Terakhir") {
+      start = subDays(today, 29); // Includes today
+      start.setHours(0, 0, 0, 0);
+    } else if (label === "Bulan Ini") {
+      start = startOfMonth(today);
+    } else if (label === "Bulan Lalu") {
+      const lastMonth = subMonths(today, 1);
+      start = startOfMonth(lastMonth);
+      end = endOfMonth(lastMonth);
+    } else if (label === "Tahun Ini") {
+      start = startOfYear(today);
+    } else {
+      // Default fallback (30 days)
+      start = subDays(today, 29);
+      start.setHours(0, 0, 0, 0);
+    }
+
+    return { startDate: start, endDate: end, label };
+  };
+
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => {
+    // Try to load saved preference from localStorage
+    try {
+      const savedLabel = localStorage.getItem("datalaris_date_pref");
+      if (savedLabel && savedLabel !== "Custom") {
+        // If saved label exists and is dynamic, recalculate dates
+        return calculateDateRangeFromLabel(savedLabel);
+      }
+    } catch (e) {
+      console.warn("Failed to load date preference", e);
+    }
+
+    // Default if no preference or error
+    return {
+      startDate: subDays(new Date(), 29), // Default last 30 days
+      endDate: new Date(),
+      label: "30 Hari Terakhir",
+    };
   });
 
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
 
   const { user } = useAuth();
-
-  useEffect(() => {
-    if (user) {
-      refreshStores();
-      refreshMarketplaces();
-    } else {
-      setStores([]);
-      setMarketplaces([]);
-    }
-  }, [user]);
 
   const refreshStores = async (): Promise<void> => {
     try {
@@ -107,6 +158,23 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       console.error("Failed to fetch marketplaces:", error);
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      refreshStores();
+      refreshMarketplaces();
+    } else {
+      setStores([]);
+      setMarketplaces([]);
+    }
+  }, [user]);
+
+  // Save date preference
+  useEffect(() => {
+    if (dateRange.label && dateRange.label !== "Custom") {
+      localStorage.setItem("datalaris_date_pref", dateRange.label);
+    }
+  }, [dateRange.label]);
 
   const getMarketplaceName = (id: string): string => {
     const mp = marketplaces.find((m) => m.id === id || m.ID === id);

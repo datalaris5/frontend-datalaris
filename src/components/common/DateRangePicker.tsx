@@ -25,8 +25,10 @@ import {
   startOfWeek,
   endOfWeek,
   subDays,
-  startOfMonth as getStartOfMonth,
   startOfYear,
+  isAfter,
+  isBefore,
+  isToday,
 } from "date-fns";
 import { id } from "date-fns/locale";
 import {
@@ -55,9 +57,11 @@ interface CustomCalendarProps {
   month: Date;
   selectedRange: DateRange;
   onSelectDate: (date: Date) => void;
+  onMonthChange: (date: Date) => void;
   minDate: Date;
   maxDate: Date;
   isStartCalendar: boolean;
+  showNavigation?: boolean;
 }
 
 /**
@@ -68,31 +72,26 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   month,
   selectedRange,
   onSelectDate,
+  onMonthChange,
   minDate,
   maxDate,
   isStartCalendar,
+  showNavigation = true,
 }) => {
-  const [currentMonth, setCurrentMonth] = useState(month);
-
   // Hitung tanggal awal dan akhir yang perlu ditampilkan
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
+  const monthStart = startOfMonth(month);
+  const monthEnd = endOfMonth(month);
   const startDate = startOfWeek(monthStart, { locale: id });
   const endDate = endOfWeek(monthEnd, { locale: id });
 
   // Label hari dalam bahasa Indonesia (singkat)
   const weekDays = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
-  // Sinkronkan dengan prop month
-  useEffect(() => {
-    setCurrentMonth(month);
-  }, [month]);
-
   const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
 
-  // Handler navigasi bulan
-  const handlePrevMonth = () => setCurrentMonth((prev) => subMonths(prev, 1));
-  const handleNextMonth = () => setCurrentMonth((prev) => addMonths(prev, 1));
+  // Handler navigasi bulan (memanggil parent)
+  const handlePrevMonth = () => onMonthChange(subMonths(month, 1));
+  const handleNextMonth = () => onMonthChange(addMonths(month, 1));
 
   // Helper functions untuk cek status tanggal
   const isDateInRange = (date: Date): boolean => {
@@ -107,31 +106,31 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
     !!selectedRange?.from && isSameDay(date, selectedRange.from);
   const isRangeEnd = (date: Date): boolean =>
     !!selectedRange?.to && isSameDay(date, selectedRange.to);
-  const isToday = (date: Date): boolean => isSameDay(date, new Date());
+  const isTodayDate = (date: Date): boolean => isSameDay(date, new Date());
 
   return (
     <div className="w-full">
       {/* Header dengan navigasi bulan/tahun */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={handlePrevMonth}
-          className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
-        >
-          <ChevronLeft size={14} className="text-muted-foreground" />
-        </button>
+      <div className="flex items-center justify-between mb-4 h-8">
+        {showNavigation ? (
+          <button
+            onClick={handlePrevMonth}
+            className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
+          >
+            <ChevronLeft size={14} className="text-muted-foreground" />
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
 
         <div className="flex items-center gap-1">
           {/* Selector Bulan */}
           <div className="relative group">
             <select
-              value={currentMonth.getMonth()}
+              value={month.getMonth()}
               onChange={(e) =>
-                setCurrentMonth(
-                  new Date(
-                    currentMonth.getFullYear(),
-                    parseInt(e.target.value),
-                    1
-                  )
+                onMonthChange(
+                  new Date(month.getFullYear(), parseInt(e.target.value), 1)
                 )
               }
               className="appearance-none bg-transparent hover:bg-muted font-semibold text-sm py-1 pl-2 pr-6 rounded-md cursor-pointer focus:outline-none text-foreground transition-colors z-10 relative"
@@ -151,10 +150,10 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
           {/* Selector Tahun */}
           <div className="relative group">
             <select
-              value={currentMonth.getFullYear()}
+              value={month.getFullYear()}
               onChange={(e) =>
-                setCurrentMonth(
-                  new Date(parseInt(e.target.value), currentMonth.getMonth(), 1)
+                onMonthChange(
+                  new Date(parseInt(e.target.value), month.getMonth(), 1)
                 )
               }
               className="appearance-none bg-transparent hover:bg-muted font-semibold text-sm py-1 pl-2 pr-6 rounded-md cursor-pointer focus:outline-none text-foreground transition-colors z-10 relative"
@@ -175,12 +174,16 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={handleNextMonth}
-          className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
-        >
-          <ChevronRight size={14} className="text-muted-foreground" />
-        </button>
+        {showNavigation ? (
+          <button
+            onClick={handleNextMonth}
+            className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
+          >
+            <ChevronRight size={14} className="text-muted-foreground" />
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
       </div>
 
       {/* Label hari */}
@@ -198,11 +201,11 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
       {/* Grid tanggal */}
       <div className="grid grid-cols-7 gap-1">
         {dateRange.map((date, i) => {
-          const isCurrentMonth = isSameMonth(date, currentMonth);
+          const isCurrentMonth = isSameMonth(date, month);
           const inRange = isDateInRange(date);
           const isStart = isRangeStart(date);
           const isEnd = isRangeEnd(date);
-          const isTodayDate = isToday(date);
+          const isDateToday = isTodayDate(date);
           const isDisabled =
             (minDate && date < minDate) || (maxDate && date > maxDate);
 
@@ -211,22 +214,22 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
             "h-8 w-8 flex flex-col items-center justify-center text-sm rounded-md transition-all cursor-pointer relative font-medium ";
 
           if (isDisabled) {
-            cellClasses += "text-muted-foreground/30 cursor-not-allowed ";
+            cellClasses += "text-muted-foreground/50 cursor-not-allowed ";
           } else if (isStart || isEnd) {
             // Tanggal awal/akhir range - highlight orange
             cellClasses +=
-              "bg-orange-600 text-white shadow-md shadow-orange-500/30 hover:bg-orange-700 z-10 ";
+              "bg-primary text-primary-foreground shadow-md shadow-primary/30 hover:bg-primary/90 z-10 ";
           } else if (inRange) {
             // Dalam range - background subtle
             cellClasses +=
-              "bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-100 rounded-none font-medium ";
+              "bg-primary/10 dark:bg-primary/20 text-primary rounded-none font-medium ";
           } else if (!isCurrentMonth) {
             // Di luar bulan aktif - subtle
-            cellClasses += "text-muted-foreground/30 ";
-          } else if (isTodayDate) {
+            cellClasses += "text-muted-foreground/50 ";
+          } else if (isDateToday) {
             // Hari ini - border highlight
             cellClasses +=
-              "text-orange-600 bg-orange-50 dark:bg-orange-900/10 font-bold border border-orange-200 dark:border-orange-800 ";
+              "text-primary bg-primary/5 dark:bg-primary/10 font-bold border border-primary/20 dark:border-primary/20 ";
           } else {
             // Normal state
             cellClasses += "text-foreground hover:bg-muted ";
@@ -269,6 +272,18 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const { dateRange, setDateRange } = useFilter();
   const [isOpen, setIsOpen] = useState(false);
   const today = new Date();
+
+  // State navigasi kalender
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const handleNextMonth = () => {
+    setCurrentMonth(addMonths(currentMonth, 1));
+  };
+
+  const handlePrevMonth = () => {
+    setCurrentMonth(subMonths(currentMonth, 1));
+  };
+
   const defaultMaxDate = new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -322,12 +337,14 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       setTempLabel("Custom");
 
       // Auto-apply saat range selesai dipilih
-      setDateRange({
-        startDate: finalRange.from!,
-        endDate: finalRange.to!,
-        label: "Custom",
-      });
-      setIsOpen(false);
+      if (finalRange.from && finalRange.to) {
+        setDateRange({
+          startDate: finalRange.from,
+          endDate: finalRange.to,
+          label: "Custom",
+        });
+        setIsOpen(false);
+      }
     }
   };
 
@@ -336,11 +353,15 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
    * Menghitung tanggal berdasarkan preset dan langsung apply
    */
   const handlePreset = (days: number | string, label: string): void => {
-    const end = effectiveMaxDate;
+    let end = effectiveMaxDate;
     let start = new Date();
 
     if (label === "Bulan Ini") {
-      start = getStartOfMonth(new Date());
+      start = startOfMonth(new Date());
+    } else if (label === "Bulan Lalu") {
+      const lastMonth = subMonths(new Date(), 1);
+      start = startOfMonth(lastMonth);
+      end = endOfMonth(lastMonth); // Override end date for this case
     } else if (label === "Tahun Ini") {
       start = startOfYear(new Date());
     } else if (typeof days === "number") {
@@ -372,6 +393,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
     { l: "7 Hari Terakhir", d: 7 },
     { l: "30 Hari Terakhir", d: 30 },
     { l: "Bulan Ini", d: "month" },
+    { l: "Bulan Lalu", d: "last_month" },
     { l: "Tahun Ini", d: "year" },
   ] as const;
 
@@ -381,47 +403,38 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       <PopoverTrigger asChild>
         <Button
           id="date"
-          variant="filter"
+          variant="ghost" // Use ghost to avoid conflicting background/borders
           className={cn(
-            "w-[220px] sm:w-[260px] h-12 px-4 justify-between group",
-            isOpen && "ring-2 ring-orange-500/20 border-orange-500/50"
+            "w-auto h-10 px-3 justify-between group gap-3 min-w-[200px] glass-card border-white/10 text-foreground shadow-sm hover:bg-white/5 active:scale-[0.98] transition-all bg-background/20 backdrop-blur-md hover:text-foreground rounded-xl",
+            isOpen && "ring-2 ring-primary/20 border-primary/50 bg-white/10"
           )}
         >
-          <div className="flex items-center gap-3 overflow-hidden text-left">
-            <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 group-hover:bg-orange-100 transition-colors">
-              <CalendarIcon size={20} />
-            </div>
-            <div className="flex flex-col items-start gap-0.5 overflow-hidden">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider leading-none">
-                Periode
-              </span>
-              <span className="text-sm font-bold truncate text-foreground/90 max-w-[170px] leading-tight">
-                {dateRange.label === "Custom" &&
-                selectedRange?.from &&
-                selectedRange?.to
-                  ? `${formatDate(selectedRange.from)} - ${formatDate(
-                      selectedRange.to
-                    )}`
-                  : dateRange.label}
-              </span>
-            </div>
+          <div className="flex items-center gap-2.5 overflow-hidden text-left">
+            <CalendarIcon size={16} className="text-primary" />
+            <span className="text-sm font-semibold truncate text-foreground/90 leading-tight">
+              {dateRange.label === "Custom" &&
+              selectedRange?.from &&
+              selectedRange?.to
+                ? `${formatDate(selectedRange.from)} - ${formatDate(
+                    selectedRange.to
+                  )}`
+                : dateRange.label}
+            </span>
           </div>
-          <div className="pr-3">
-            <ChevronDown
-              size={16}
-              className={cn(
-                "text-muted-foreground/50 group-hover:text-foreground transition-transform duration-300",
-                isOpen && "rotate-180"
-              )}
-            />
-          </div>
+          <ChevronDown
+            size={14}
+            className={cn(
+              "text-muted-foreground/50 group-hover:text-foreground transition-transform duration-300 ml-1",
+              isOpen && "rotate-180"
+            )}
+          />
         </Button>
       </PopoverTrigger>
 
       {/* Popover Content */}
       <PopoverContent
         align="end"
-        className="w-auto p-0 glass-card overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200"
+        className="w-auto p-0 glass-card border-white/10 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200 backdrop-blur-3xl shadow-2xl"
       >
         <div className="flex flex-col md:flex-row max-h-[80vh] overflow-y-auto">
           {/* Sidebar Preset */}
@@ -437,13 +450,13 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
                   className={cn(
                     "w-full text-left px-3 py-2 text-sm rounded-lg transition-all relative overflow-hidden",
                     tempLabel === preset.l
-                      ? "bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 font-semibold shadow-sm"
+                      ? "bg-primary/10 text-primary dark:bg-primary/20 font-semibold shadow-sm"
                       : "text-foreground/80 hover:bg-background hover:text-foreground hover:shadow-sm"
                   )}
                 >
                   {preset.l}
                   {tempLabel === preset.l && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-orange-500 rounded-r-full"></span>
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full"></span>
                   )}
                 </button>
               ))}
@@ -471,25 +484,26 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <CustomCalendar
-                  month={selectedRange?.from || new Date()}
+                  month={currentMonth}
                   selectedRange={selectedRange}
                   onSelectDate={handleDateSelect}
+                  onMonthChange={setCurrentMonth}
                   minDate={effectiveMinDate}
                   maxDate={effectiveMaxDate}
                   isStartCalendar={true}
+                  showNavigation={true}
                 />
               </div>
               <div>
                 <CustomCalendar
-                  month={
-                    selectedRange?.to ||
-                    addMonths(selectedRange?.from || new Date(), 1)
-                  }
+                  month={addMonths(currentMonth, 1)}
                   selectedRange={selectedRange}
                   onSelectDate={handleDateSelect}
+                  onMonthChange={(date) => setCurrentMonth(subMonths(date, 1))}
                   minDate={effectiveMinDate}
                   maxDate={effectiveMaxDate}
                   isStartCalendar={false}
+                  showNavigation={false}
                 />
               </div>
             </div>
