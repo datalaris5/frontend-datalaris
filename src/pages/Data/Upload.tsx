@@ -5,7 +5,7 @@
  *
  * Fitur:
  * - Pilih tipe data (Tinjauan, Pesanan, Iklan, Chat)
- * - Drag & drop file area
+ * - Drag & drop MULTIPLE files
  * - Riwayat upload
  *
  * Catatan: Saat ini hanya support platform Shopee
@@ -14,6 +14,7 @@
 import React, { useState, useEffect, ChangeEvent, DragEvent } from "react";
 import { api } from "@/services/api";
 import toast from "react-hot-toast";
+import { AxiosError } from "axios";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -24,6 +25,10 @@ import {
   Megaphone,
   AlertCircle,
   LucideIcon,
+  ShoppingBag,
+  X,
+  FileWarning,
+  Info,
 } from "lucide-react";
 import { useFilter } from "@/context/FilterContext";
 import {
@@ -35,9 +40,25 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+  UPLOAD_TYPES,
+  allowedExtensions,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILE_SIZE_MB,
+  UploadType,
+  PlatformKey,
+  PLATFORMS,
+} from "@/types/upload.types";
 
 // Tipe untuk history item
 interface HistoryItem {
@@ -48,25 +69,27 @@ interface HistoryItem {
 
 // Tipe untuk data type option
 interface DataTypeOption {
-  id: string;
+  id: UploadType;
   label: string;
   icon: LucideIcon;
   color: string;
   desc: string;
 }
 
-// Tipe platform names
-type PlatformKey = "shopee" | "tiktok-tokopedia" | "all";
-
 const DataUpload: React.FC = () => {
   const { store, platform } = useFilter();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<UploadType>(UPLOAD_TYPES.OVERVIEW);
   const [dragActive, setDragActive] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+
+  // State untuk Multiple Files
+  const [files, setFiles] = useState<File[]>([]);
+
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [uploadStatus, setUploadStatus] = useState<"success" | "error" | null>(
     null
   );
+
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -80,6 +103,7 @@ const DataUpload: React.FC = () => {
         setHistory(res.data?.data || []);
       } catch (err) {
         console.error("Failed to fetch history:", err);
+        setHistory([]);
       } finally {
         setLoadingHistory(false);
       }
@@ -91,6 +115,30 @@ const DataUpload: React.FC = () => {
       setHistory([]);
     }
   }, [store]);
+
+  /**
+   * Validasi params file satu per satu
+   */
+  const validateFile = (file: File): boolean => {
+    // 1. Cek ukuran
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      toast.error(`${file.name}: Ukuran file maksimal ${MAX_FILE_SIZE_MB}MB`);
+      return false;
+    }
+
+    // 2. Cek ekstensi
+    const fileName = file.name.toLowerCase();
+    const isValidExtension = allowedExtensions.some((ext) =>
+      fileName.endsWith(ext)
+    );
+
+    if (!isValidExtension) {
+      toast.error(`${file.name}: Format tidak didukung`);
+      return false;
+    }
+
+    return true;
+  };
 
   /**
    * Handler untuk drag event
@@ -106,107 +154,158 @@ const DataUpload: React.FC = () => {
   };
 
   /**
-   * Handler untuk drop file
+   * Handler untuk drop file (Multiple)
    */
   const handleDrop = (e: DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
-      setUploadStatus(null);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const validFiles = droppedFiles.filter(validateFile);
+
+      if (validFiles.length > 0) {
+        setFiles((prev) => [...prev, ...validFiles]);
+        setUploadStatus(null);
+      }
     }
   };
 
   /**
-   * Handler untuk input file change
+   * Handler untuk input file change (Multiple)
    */
   const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
     e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setUploadStatus(null);
+    if (e.target.files && e.target.files.length > 0) {
+      const selectedFiles = Array.from(e.target.files);
+      const validFiles = selectedFiles.filter(validateFile);
+
+      if (validFiles.length > 0) {
+        setFiles((prev) => [...prev, ...validFiles]);
+        setUploadStatus(null);
+      }
+      // Reset input value agar bisa select file yang sama lagi kalau dihapus
+      e.target.value = "";
     }
   };
 
   /**
-   * Handler untuk upload file ke backend
+   * Remove individual file from list
+   */
+  const removeFile = (indexToRemove: number) => {
+    setFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  /**
+   * Handler untuk upload MASSAL ke backend
    */
   const handleUpload = async (): Promise<void> => {
-    if (!file) return;
+    if (files.length === 0) return;
 
-    if (platform !== "shopee") {
+    if (platform !== PLATFORMS.SHOPEE) {
       toast.error("Saat ini hanya support upload untuk Shopee");
       return;
     }
 
-    setUploading(true);
-    const loadingToast = toast.loading("Mengupload data...");
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    if (store !== "all") {
-      formData.append("store_id", store);
-    } else {
-      toast.error("Silakan pilih toko terlebih dahulu di bagian atas halaman", {
-        id: loadingToast,
-      });
-      setUploading(false);
+    if (store === "all") {
+      toast.error("Silakan pilih toko terlebih dahulu");
       return;
     }
 
-    try {
-      await api.upload.send(platform, activeTab, formData, store);
+    setUploading(true);
+    setUploadStatus(null);
+    setProgress({ current: 0, total: files.length });
 
+    let successCount = 0;
+    let failCount = 0;
+
+    // Toast Loading ID
+    const loadingToast = toast.loading(`Mengupload 0/${files.length} file...`);
+
+    // Loop upload satu per satu (Sequential biar aman & status jelas)
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      // Update toast progress
+      toast.loading(`Mengupload ${i + 1}/${files.length}: ${file.name}...`, {
+        id: loadingToast,
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("store_id", store);
+
+      try {
+        await api.upload.send(platform, activeTab, formData, store);
+        successCount++;
+      } catch (error: any) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        failCount++;
+        // Optional: Simpan error message per file jika perlu
+      }
+
+      // Update progress state
+      setProgress((prev) => ({ ...prev, current: i + 1 }));
+    }
+
+    // Final Report
+    if (failCount === 0) {
       setUploadStatus("success");
-      toast.success("Data berhasil diupload!", { id: loadingToast });
+      toast.success(`Sukses! ${successCount} file berhasil diupload.`, {
+        id: loadingToast,
+      });
+      setFiles([]); // Clear all if smooth
+    } else if (successCount === 0) {
+      setUploadStatus("error");
+      toast.error(`Gagal! Semua ${failCount} file gagal diupload.`, {
+        id: loadingToast,
+      });
+    } else {
+      // Partial Success
+      toast.success(`Selesai. ${successCount} sukses, ${failCount} gagal.`, {
+        id: loadingToast,
+      });
+      // Keep files (or failed files only) could be an improvement later
+      setFiles([]);
+    }
 
-      // Refresh history
+    // Refresh history
+    setUploading(false);
+    try {
       const res = await api.upload.getHistory(store);
       setHistory(res.data?.data || []);
-
-      setTimeout(() => {
-        setFile(null);
-        setUploadStatus(null);
-      }, 3000);
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      const errMsg =
-        error.response?.data?.error || "Terjadi kesalahan saat upload";
-      toast.error(`Upload gagal: ${errMsg}`, { id: loadingToast });
-      setUploadStatus("error");
-    } finally {
-      setUploading(false);
+    } catch (e) {
+      /* ignore */
     }
   };
 
   // Konfigurasi tipe data per platform
   const dataTypes: Record<string, DataTypeOption[]> = {
-    shopee: [
+    [PLATFORMS.SHOPEE]: [
       {
-        id: "overview",
+        id: UPLOAD_TYPES.OVERVIEW,
         label: "Shopee Tinjauan",
         icon: TrendingUp,
         color: "blue",
         desc: "Ringkasan harian performa toko",
       },
       {
-        id: "orders",
+        id: UPLOAD_TYPES.ORDERS,
         label: "Shopee Pesanan",
-        icon: FileSpreadsheet,
+        icon: ShoppingBag,
         color: "orange",
         desc: "Detail pesanan per item",
       },
       {
-        id: "ads",
+        id: UPLOAD_TYPES.ADS,
         label: "Shopee Iklan",
         icon: Megaphone,
         color: "purple",
         desc: "Data performa iklan Shopee",
       },
       {
-        id: "chat",
+        id: UPLOAD_TYPES.CHAT,
         label: "Shopee Chat",
         icon: MessageCircle,
         color: "green",
@@ -215,23 +314,23 @@ const DataUpload: React.FC = () => {
     ],
   };
 
-  const platformNames: Record<PlatformKey, string> = {
-    shopee: "Shopee",
-    "tiktok-tokopedia": "TikTok & Tokopedia",
-    all: "Semua Platform",
+  const platformNames: Record<string, string> = {
+    [PLATFORMS.SHOPEE]: "Shopee",
+    [PLATFORMS.TIKTOK_TOKOPEDIA]: "TikTok & Tokopedia",
+    [PLATFORMS.ALL]: "Semua Platform",
   };
 
   return (
-    <div className="flex flex-col h-full gap-6 max-w-6xl mx-auto w-full animate-fade-in pb-10">
+    <div className="flex flex-col h-full gap-6 w-full animate-fade-in pb-10">
       {/* Header */}
       <div className="space-y-1">
         <h2 className="text-2xl font-bold tracking-tight">Pusat Upload Data</h2>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Platform:</span>
           <Badge variant="secondary" className="font-semibold">
-            {platformNames[platform as PlatformKey] || platform}
+            {platformNames[platform] || platform}
           </Badge>
-          {platform !== "shopee" && (
+          {platform !== PLATFORMS.SHOPEE && (
             <Badge
               variant="outline"
               className="text-xs border-blue-200 bg-blue-50 text-blue-700"
@@ -261,146 +360,245 @@ const DataUpload: React.FC = () => {
       )}
 
       {/* Data Type Selection */}
-      {platform === "shopee" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {dataTypes.shopee.map((type) => {
-            const Icon = type.icon;
-            const isActive = activeTab === type.id;
-            return (
-              <Card
-                key={type.id}
-                className={cn(
-                  "cursor-pointer transition-all hover:shadow-md border-2",
-                  isActive
-                    ? `border-${type.color}-500 bg-${type.color}-50/30 dark:bg-${type.color}-900/10`
-                    : "hover:border-primary/50"
-                )}
-                onClick={() => {
-                  setActiveTab(type.id);
-                  setFile(null);
-                  setUploadStatus(null);
-                }}
-              >
-                <CardContent className="p-4 flex flex-col items-start gap-2">
-                  <div
-                    className={cn(
-                      "p-2 rounded-lg",
-                      isActive
-                        ? `bg-${type.color}-100 text-${type.color}-600`
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    <Icon size={20} />
-                  </div>
-                  <div>
-                    <h4
-                      className={cn(
-                        "font-bold text-sm",
-                        isActive && `text-${type.color}-700`
-                      )}
+      {/* Data Type Selection using Tabs */}
+      {platform === PLATFORMS.SHOPEE && (
+        <div className="w-full">
+          <TooltipProvider>
+            <Tabs
+              value={activeTab}
+              onValueChange={(val) => {
+                setActiveTab(val as UploadType);
+                setFiles([]);
+                setUploadStatus(null);
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 bg-muted/50">
+                {dataTypes[PLATFORMS.SHOPEE].map((type) => {
+                  const Icon = type.icon;
+                  // Use a distinct "Info Area" for the tooltip to avoid nesting buttons
+                  return (
+                    <TabsTrigger
+                      key={type.id}
+                      value={type.id}
+                      className="group flex flex-col items-center gap-2 py-3 relative data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
                     >
-                      {type.label}
-                    </h4>
-                    <p className="text-xs text-muted-foreground">{type.desc}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <Icon size={18} />
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold">
+                          {type.label}
+                        </span>
+
+                        {/* Info Icon with Tooltip */}
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="cursor-default opacity-40 hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()} // Prevent tab selection when clicking info
+                            >
+                              <Info size={12} />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="bottom"
+                            className="max-w-[200px] text-xs"
+                          >
+                            <p>{type.desc}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </Tabs>
+          </TooltipProvider>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Upload Card */}
-        <Card className="lg:col-span-2 glass-card border-dashed border-2 shadow-sm">
+        <Card className="lg:col-span-2 glass-card border-dashed border-2 shadow-sm flex flex-col h-full">
           <CardHeader>
-            <CardTitle>Upload File</CardTitle>
+            <CardTitle>Upload Massal</CardTitle>
             <CardDescription>
-              Format yang didukung: .xlsx, .xls, .csv (Max 10MB)
+              Format: {allowedExtensions.join(", ")} (Max {MAX_FILE_SIZE_MB}
+              MB/file)
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div
-              className={cn(
-                "relative flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl transition-all h-64",
-                store === "all"
-                  ? "opacity-50 cursor-not-allowed bg-muted"
-                  : "cursor-pointer",
-                dragActive
-                  ? "border-primary bg-primary/5"
-                  : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30"
-              )}
-              onDragEnter={store !== "all" ? handleDrag : undefined}
-              onDragLeave={store !== "all" ? handleDrag : undefined}
-              onDragOver={store !== "all" ? handleDrag : undefined}
-              onDrop={store !== "all" ? handleDrop : undefined}
-            >
-              <input
-                type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                onChange={handleChange}
-                accept=".xlsx,.xls,.csv"
-                disabled={uploading || store === "all"}
-              />
-              <div className="flex flex-col items-center gap-4 text-center">
+          <CardContent className="p-0 flex-1">
+            {/* 
+               FIXED HEIGHT: We use h-[500px] to force the container to have a specific size. 
+               This ensures the internal "ScrollArea" will actually scroll when files > 7.
+               If we used min-h, it would just grow endlessly.
+            */}
+            <div className="grid grid-cols-1 md:grid-cols-5 h-[500px]">
+              {/* Left Side: Drop Zone */}
+              <div className="md:col-span-2 p-6 border-r border-dashed bg-muted/10 h-full flex flex-col justify-center">
                 <div
                   className={cn(
-                    "p-4 rounded-full transition-colors",
-                    uploadStatus === "success"
-                      ? "bg-green-100 text-green-600"
-                      : file
-                      ? "bg-orange-100 text-orange-600"
-                      : "bg-muted text-muted-foreground"
+                    "relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-all h-full min-h-[250px]",
+                    store === "all"
+                      ? "opacity-50 cursor-not-allowed bg-muted"
+                      : "cursor-pointer",
+                    dragActive
+                      ? "border-primary bg-primary/5 scale-[1.02] shadow-lg"
+                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30"
                   )}
+                  onDragEnter={store !== "all" ? handleDrag : undefined}
+                  onDragLeave={store !== "all" ? handleDrag : undefined}
+                  onDragOver={store !== "all" ? handleDrag : undefined}
+                  onDrop={store !== "all" ? handleDrop : undefined}
                 >
-                  {uploadStatus === "success" ? (
-                    <CheckCircle size={32} />
-                  ) : file ? (
-                    <FileSpreadsheet size={32} />
-                  ) : (
-                    <UploadCloud size={32} />
+                  <input
+                    type="file"
+                    multiple // Enable MULTIPLE selection
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    onChange={handleChange}
+                    accept={allowedExtensions.join(",")}
+                    disabled={uploading || store === "all"}
+                  />
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div
+                      className={cn(
+                        "p-4 rounded-full transition-colors shadow-sm",
+                        uploadStatus === "success"
+                          ? "bg-green-100 text-green-600"
+                          : files.length > 0
+                          ? "bg-blue-100 text-blue-600"
+                          : "bg-background shadow-inner text-muted-foreground"
+                      )}
+                    >
+                      {uploadStatus === "success" ? (
+                        <CheckCircle size={32} />
+                      ) : (
+                        <UploadCloud size={32} />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-base text-foreground">
+                        Drop items here
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 px-4">
+                        or click to browse from your computer
+                      </p>
+                    </div>
+                    {files.length > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="mt-2 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      >
+                        +{files.length} file dipilih
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Side: File Queue & Actions */}
+              <div className="md:col-span-3 p-6 flex flex-col h-full bg-background/50 overflow-hidden">
+                <div className="flex items-center justify-between mb-4 shrink-0">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <FileSpreadsheet size={16} className="text-primary" />
+                    File Queue
+                  </h3>
+                  {files.length > 0 && (
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {files.length} file ready
+                    </Badge>
                   )}
                 </div>
-                <div>
-                  {uploadStatus === "success" ? (
-                    <p className="text-lg font-bold text-green-600">
-                      Upload Berhasil!
-                    </p>
-                  ) : file ? (
-                    <>
-                      <p className="font-medium text-foreground">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(file.size / 1024).toFixed(2)} KB
+
+                <div className="flex-1 min-h-0 bg-muted/20 border rounded-lg overflow-hidden relative">
+                  {files.length === 0 ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground p-6 text-center">
+                      <FileSpreadsheet className="w-12 h-12 mb-3 opacity-20" />
+                      <p className="text-sm font-medium">No files selected</p>
+                      <p className="text-xs opacity-70">
+                        Files you select will appear here
                       </p>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <p className="font-medium">
-                        Drag & drop file Excel di sini
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        atau klik untuk memilih file
-                      </p>
-                    </>
+                    <ScrollArea className="h-full w-full p-2">
+                      <div className="space-y-2 pb-2">
+                        {files.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="group flex items-center justify-between p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-all text-sm"
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                                <FileSpreadsheet className="w-4 h-4 text-blue-500" />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="truncate max-w-[150px] font-medium text-foreground">
+                                  {file.name}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {(file.size / 1024).toFixed(0)} KB
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!uploading && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-red-500 opacity-60 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => removeFile(idx)}
+                                >
+                                  <X size={14} />
+                                </Button>
+                              )}
+                              {uploading && progress.current === idx + 1 && (
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                              )}
+                              {uploading && progress.current > idx + 1 && (
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="mt-4 flex justify-end gap-3 pt-2 border-t border-dashed shrink-0">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setFiles([])}
+                    disabled={files.length === 0 || uploading}
+                    className="text-muted-foreground hover:text-red-500"
+                  >
+                    Clear All
+                  </Button>
+
+                  <Button
+                    onClick={handleUpload}
+                    disabled={
+                      files.length === 0 || uploading || store === "all"
+                    }
+                    className={cn(
+                      "bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold shadow-lg shadow-orange-500/20 transition-all",
+                      files.length === 0 &&
+                        "opacity-50 grayscale cursor-not-allowed shadow-none"
+                    )}
+                  >
+                    {uploading && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {uploading
+                      ? "Proses..."
+                      : `Upload ${
+                          files.length > 0 ? files.length + " Files" : ""
+                        }`}
+                  </Button>
                 </div>
               </div>
             </div>
-
-            {file && !uploadStatus && (
-              <div className="mt-6 flex justify-end">
-                <Button
-                  onClick={handleUpload}
-                  disabled={uploading || store === "all"}
-                  className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold shadow-lg shadow-orange-500/20"
-                >
-                  {uploading && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {uploading ? "Memproses..." : "Proses Data"}
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
 

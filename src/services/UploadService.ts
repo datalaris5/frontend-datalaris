@@ -7,12 +7,12 @@
  * - overview: Data tinjauan (penjualan, pesanan, dll)
  * - ads: Data iklan
  * - chat: Data percakapan
+ * - orders: Data pesanan
  */
 
 import apiClient from "./axios";
 import type { AxiosResponse } from "axios";
-
-type UploadType = "overview" | "orders" | "ads" | "chat";
+import { UploadType, UPLOAD_ENDPOINTS } from "@/types/upload.types";
 
 export const UploadService = {
   send: (
@@ -25,20 +25,15 @@ export const UploadService = {
       return Promise.reject(new Error("Store ID is required"));
     }
 
-    let endpoint = "";
-    if (type === "overview") {
-      endpoint = `/admin/upload/tinjauan/${storeId}`;
-    } else if (type === "ads") {
-      endpoint = `/admin/upload/iklan/${storeId}`;
-    } else if (type === "chat") {
-      endpoint = `/admin/upload/chat/${storeId}`;
-    } else if (type === "orders") {
-      endpoint = `/admin/upload/pesanan/${storeId}`;
-    } else {
+    const getEndpoint = UPLOAD_ENDPOINTS[type];
+
+    if (!getEndpoint) {
       return Promise.reject(
         new Error("Tipe data ini belum didukung untuk upload.")
       );
     }
+
+    const endpoint = getEndpoint(storeId);
 
     return apiClient.post(endpoint, formData, {
       headers: { "Content-Type": "multipart/form-data" },
