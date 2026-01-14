@@ -42,7 +42,20 @@ import {
   Upload,
   ArrowUpDown,
   LucideIcon,
+  Loader2,
 } from "lucide-react";
+import {
+  chartColors,
+  chartUI,
+  chartGradients,
+  chartLayout,
+  chartTypography,
+  chartHeaderIcons,
+  chartContent,
+  chartAnimation,
+} from "@/config/chartTheme";
+import ChartTooltip from "@/components/common/ChartTooltip";
+import { formatAxisValue } from "@/utils/chartUtils";
 import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -54,7 +67,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFilter } from "@/context/FilterContext";
-import { api } from "@/services/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,177 +75,108 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import DateRangePicker from "@/components/common/DateRangePicker";
+import { motion } from "framer-motion";
+import {
+  staggerContainerVariants,
+  fadeInUpVariants,
+  chartContentVariants,
+} from "@/config/animationConfig";
 import FeatureNotReady from "@/components/common/FeatureNotReady";
 import { format } from "date-fns";
 import CountUp from "react-countup";
 import MetricCard from "@/components/dashboard/MetricCard";
-import { MetricColor } from "@/types/dashboard.types";
-
-// === TYPES ===
-
-interface SparklineItem {
-  tanggal?: string;
-  total: number;
-}
-
-interface AdsMetric {
-  title: string;
-  value: number;
-  format: "currency" | "number" | "percent";
-  suffix?: string;
-  trend: string;
-  trendUp: boolean;
-  data: number[];
-  icon: LucideIcon;
-  highlight?: boolean;
-  isDummy: boolean;
-  color: MetricColor;
-}
-
-interface SalesTrendDataPoint {
-  month: string;
-  penjualan: number;
-  biaya: number;
-}
-
-interface RoasTrendDataPoint {
-  month: string;
-  roas: number;
-}
-
-interface TopProduct {
-  nama_iklan: string;
-  penjualan: number;
-  biaya: number;
-  roas: number;
-  convertion_rate: number;
-}
-
-interface StoreItem {
-  id?: string | number;
-}
-
-interface AggregatedData {
-  penjualan: { total: number; percent: number; sparkline: SparklineItem[] };
-  biaya: { total: number; percent: number; sparkline: SparklineItem[] };
-  roas: { total: number; percent: number; sparkline: SparklineItem[] };
-  cr: { total: number; percent: number; sparkline: SparklineItem[] };
-  ctr: { total: number; percent: number; sparkline: SparklineItem[] };
-  impressions: { total: number; percent: number; sparkline: SparklineItem[] };
-}
+import {
+  MetricCardSkeleton,
+  ChartSkeleton,
+  ChartEmptyState,
+  InsightBanner,
+} from "@/components/dashboard";
+import { MetricColor, DashboardMetric } from "@/types/dashboard.types";
+import { AnimatePresence } from "framer-motion";
+import { MetricSelector } from "@/components/dashboard/MetricSelector";
+import TabToggle from "@/components/ui/TabToggle";
+import {
+  aggregateData,
+  getAvailableGranularities,
+  TimeGranularity,
+  granularityLabels,
+} from "@/utils/timeAggregation";
+import { useAdsData } from "@/hooks/useAdsData";
 
 // === MAIN COMPONENT ===
 
 const DashboardAds: React.FC = () => {
   const { store, stores, dateRange } = useFilter();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
 
-  // Data States
-  const [salesTrendData, setSalesTrendData] = useState<SalesTrendDataPoint[]>(
-    []
-  );
-  const [roasTrendData, setRoasTrendData] = useState<RoasTrendDataPoint[]>([]);
-  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
-  const [sortBy, setSortBy] = useState<"penjualan" | "biaya" | "roas">(
-    "penjualan"
-  );
-  const [activeChart, setActiveChart] = useState<"sales" | "roas">("sales");
+  // Custom Hook for Data Fetching
+  const { metrics, loading, topProducts, chartData } = useAdsData();
 
-  // Metrics State
-  const [metrics, setMetrics] = useState<AdsMetric[]>([
-    {
-      title: "Total Penjualan",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: TrendingUp,
-      highlight: true,
-      isDummy: false,
-      color: "blue",
-    },
-    {
-      title: "Total Biaya Iklan",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: DollarSign,
-      highlight: true,
-      isDummy: false,
-      color: "orange",
-    },
-    {
-      title: "ROAS",
-      value: 0,
-      format: "number",
-      suffix: "x",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Target,
-      isDummy: false,
-      color: "purple",
-    },
-    {
-      title: "AOV Iklan",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Target,
-      isDummy: true,
-      color: "blue",
-    },
-    {
-      title: "Total Dilihat",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Eye,
-      isDummy: false,
-      color: "pink",
-    },
-    {
-      title: "Persentase Klik (CTR)",
-      value: 0,
-      format: "percent",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: MousePointer,
-      isDummy: false,
-      color: "cyan",
-    },
-    {
-      title: "Convertion Rate",
-      value: 0,
-      format: "percent",
-      trend: "0%",
-      trendUp: false,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: MousePointer,
-      isDummy: false,
-      color: "emerald",
-    },
-    {
-      title: "CPA (Cost/Conv)",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: DollarSign,
-      isDummy: true,
-      color: "orange",
-    },
-  ]);
+  // Chart State
+  const [selectedIndicator, setSelectedIndicator] = useState<string>("sales");
+  const [selectedGranularity, setSelectedGranularity] =
+    useState<TimeGranularity>("daily");
+
+  const [sortBy, setSortBy] = useState<string>("penjualan");
+
+  const availableGranularities = React.useMemo(() => {
+    if (!dateRange?.startDate || !dateRange?.endDate) return ["daily"];
+    return getAvailableGranularities(dateRange.startDate, dateRange.endDate);
+  }, [dateRange]);
+
+  // Reset granularity if not available
+  useEffect(() => {
+    if (!availableGranularities.includes(selectedGranularity)) {
+      setSelectedGranularity(availableGranularities[0] as TimeGranularity);
+    }
+  }, [availableGranularities, selectedGranularity]);
+
+  // Re-aggregated Trend Data
+  const aggregatedTrendData = React.useMemo(() => {
+    // Return empty if basic requirements not met
+    if (!dateRange?.startDate || !dateRange?.endDate || !chartData) return [];
+
+    // Data Source Selection
+    let sourceData: any[] = [];
+    let type: "sum" | "average" = "sum";
+
+    // Strictly match normalized structure
+    switch (selectedIndicator) {
+      case "sales":
+        sourceData = chartData.sales || [];
+        break;
+      case "cost":
+        sourceData = chartData.cost || [];
+        type = "sum";
+        break;
+      case "roas":
+        sourceData = chartData.roas || [];
+        type = "average";
+        break;
+      default:
+        sourceData = [];
+    }
+
+    if (sourceData.length === 0) return [];
+
+    return aggregateData(
+      sourceData,
+      selectedGranularity,
+      dateRange.startDate,
+      dateRange.endDate,
+      type
+    );
+  }, [chartData, selectedIndicator, selectedGranularity, dateRange]);
+
+  // Empty State Logic
+  const isTrendDataEmpty = React.useMemo(() => {
+    if (loading) return false;
+    return (
+      aggregatedTrendData.length === 0 ||
+      aggregatedTrendData.every((d) => d.value === 0)
+    );
+  }, [aggregatedTrendData, loading]);
 
   const formatCurrency = (val: number): string =>
     new Intl.NumberFormat("id-ID", {
@@ -248,225 +191,13 @@ const DashboardAds: React.FC = () => {
     return `Rp${val}`;
   };
 
-  // Helper: merge sparklines
-  const mergeSparklines = (
-    base: SparklineItem[],
-    incoming: SparklineItem[]
-  ): SparklineItem[] => {
-    if (!incoming || incoming.length === 0) return base;
-    if (!base || base.length === 0) return incoming.map((i) => ({ ...i }));
-    return base.map((b, i) => {
-      const inc = incoming[i] || { total: 0 };
-      return { ...b, total: Number(b.total) + Number(inc.total) };
-    });
-  };
-
-  useEffect(() => {
-    const fetchStoreData = async (storeId: string | number) => {
-      const fromDate = dateRange?.startDate
-        ? format(dateRange.startDate, "yyyy-MM-dd")
-        : "";
-      const toDate = dateRange?.endDate
-        ? format(dateRange.endDate, "yyyy-MM-dd")
-        : "";
-      const payload = {
-        store_id: storeId,
-        date_from: fromDate,
-        date_to: toDate,
-      };
-
-      const [penjualanRes, biayaRes, roasRes, crRes, ctrRes, impressionsRes] =
-        await Promise.all([
-          api.ads.penjualan(payload),
-          api.ads.biaya(payload),
-          api.ads.roas(payload),
-          api.ads.conversionRate(payload),
-          api.ads.ctr(payload),
-          api.ads.impressions(payload),
-        ]);
-
-      const getData = (res: any) => res.data?.data || {};
-      return {
-        penjualan: getData(penjualanRes),
-        biaya: getData(biayaRes),
-        roas: getData(roasRes),
-        cr: getData(crRes),
-        ctr: getData(ctrRes),
-        impressions: getData(impressionsRes),
-      };
-    };
-
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        let aggregated: AggregatedData = {
-          penjualan: { total: 0, percent: 0, sparkline: [] },
-          biaya: { total: 0, percent: 0, sparkline: [] },
-          roas: { total: 0, percent: 0, sparkline: [] },
-          cr: { total: 0, percent: 0, sparkline: [] },
-          ctr: { total: 0, percent: 0, sparkline: [] },
-          impressions: { total: 0, percent: 0, sparkline: [] },
-        };
-
-        let targetStores: StoreItem[] = [];
-        if (store === "all") {
-          targetStores = stores.filter((s: StoreItem) => s && s.id);
-        } else {
-          targetStores = [{ id: store }];
-        }
-
-        if (targetStores.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const results = await Promise.all(
-          targetStores.map((s) => fetchStoreData(s.id!))
-        );
-
-        let totalSales = 0,
-          totalCost = 0,
-          totalImpressions = 0;
-        let weightedCTR = 0,
-          weightedCR = 0;
-
-        results.forEach((res, index) => {
-          totalSales += Number(res.penjualan.total || 0);
-          totalCost += Number(res.biaya.total || 0);
-          totalImpressions += Number(res.impressions.total || 0);
-
-          // Merge sparklines
-          if (index === 0) {
-            aggregated.penjualan.sparkline = res.penjualan.sparkline || [];
-            aggregated.biaya.sparkline = res.biaya.sparkline || [];
-            aggregated.impressions.sparkline = res.impressions.sparkline || [];
-          } else {
-            aggregated.penjualan.sparkline = mergeSparklines(
-              aggregated.penjualan.sparkline,
-              res.penjualan.sparkline || []
-            );
-            aggregated.biaya.sparkline = mergeSparklines(
-              aggregated.biaya.sparkline,
-              res.biaya.sparkline || []
-            );
-            aggregated.impressions.sparkline = mergeSparklines(
-              aggregated.impressions.sparkline,
-              res.impressions.sparkline || []
-            );
-          }
-
-          // Derived metrics
-          const ctrVal = Number(res.ctr.total || 0);
-          const clicks = totalImpressions * (ctrVal / 100);
-          weightedCTR += clicks;
-
-          const crVal = Number(res.cr.total || 0);
-          const orders = clicks * (crVal / 100);
-          weightedCR += orders;
-        });
-
-        aggregated.penjualan.total = totalSales;
-        aggregated.biaya.total = totalCost;
-        aggregated.impressions.total = totalImpressions;
-        aggregated.roas.total = totalCost > 0 ? totalSales / totalCost : 0;
-        aggregated.ctr.total =
-          totalImpressions > 0 ? (weightedCTR / totalImpressions) * 100 : 0;
-        aggregated.cr.total =
-          weightedCTR > 0 ? (weightedCR / weightedCTR) * 100 : 0;
-
-        // Calculate ROAS sparkline
-        if (aggregated.penjualan.sparkline && aggregated.biaya.sparkline) {
-          aggregated.roas.sparkline = aggregated.penjualan.sparkline.map(
-            (sItem, i) => {
-              const cItem = aggregated.biaya.sparkline[i] || { total: 0 };
-              return {
-                ...sItem,
-                total:
-                  Number(cItem.total) > 0
-                    ? Number(sItem.total) / Number(cItem.total)
-                    : 0,
-              };
-            }
-          );
-        }
-
-        // Fetch charts for single store only
-        if (store !== "all") {
-          const payload = {
-            store_id: store,
-            date_from: dateRange?.startDate
-              ? format(dateRange.startDate, "yyyy-MM-dd")
-              : "",
-            date_to: dateRange?.endDate
-              ? format(dateRange.endDate, "yyyy-MM-dd")
-              : "",
-          };
-          const [salesVsCostRes, totalRoasRes, topProductsRes] =
-            await Promise.all([
-              api.ads.salesVsCost(payload),
-              api.ads.totalRoas(payload),
-              api.ads.topProducts(payload),
-            ]);
-          setSalesTrendData(salesVsCostRes.data?.data || []);
-          setRoasTrendData(totalRoasRes.data?.data || []);
-          setTopProducts(topProductsRes.data?.data || []);
-        } else {
-          setSalesTrendData([]);
-          setRoasTrendData([]);
-          setTopProducts([]);
-        }
-
-        // Update metrics
-        setMetrics((prev) => {
-          const newMetrics = [...prev];
-          const updateMetric = (
-            index: number,
-            dataObj: { total: number; sparkline: SparklineItem[] },
-            formatType: "currency" | "number" | "percent"
-          ) => {
-            if (newMetrics[index]) {
-              newMetrics[index] = {
-                ...newMetrics[index],
-                value: dataObj.total,
-                format: formatType,
-                trend: "0%",
-                trendUp: true,
-                data:
-                  dataObj.sparkline.length > 0
-                    ? dataObj.sparkline.map((d) => Number(d.total))
-                    : [0, 0, 0, 0, 0, 0, 0],
-                isDummy: false,
-              };
-            }
-          };
-          updateMetric(0, aggregated.penjualan, "currency");
-          updateMetric(1, aggregated.biaya, "currency");
-          updateMetric(2, aggregated.roas, "number");
-          updateMetric(4, aggregated.impressions, "number");
-          updateMetric(
-            5,
-            { total: aggregated.ctr.total, sparkline: [] },
-            "percent"
-          );
-          updateMetric(
-            6,
-            { total: aggregated.cr.total, sparkline: [] },
-            "percent"
-          );
-          return newMetrics;
-        });
-      } catch (error) {
-        console.error("Ads Aggregation Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (dateRange?.startDate && dateRange?.endDate) loadData();
-  }, [store, stores, dateRange]);
-
   return (
-    <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in pb-4">
+    <motion.div
+      className="flex flex-col h-full gap-4 overflow-hidden pb-4"
+      variants={staggerContainerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
       <div className="flex items-center justify-between flex-none pt-1">
         <div>
@@ -478,9 +209,14 @@ const DashboardAds: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Filter Tanggal */}
+          <DateRangePicker
+            minDate={new Date(2024, 0, 1)}
+            maxDate={new Date()}
+          />
           <button
             onClick={() => navigate("/upload")}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
           >
             <Upload size={18} strokeWidth={2.5} />
             <span className="font-bold text-sm">Upload Data</span>
@@ -488,318 +224,347 @@ const DashboardAds: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Insight Banner */}
+      <motion.div variants={fadeInUpVariants}>
+        <InsightBanner metrics={metrics} loading={loading} />
+      </motion.div>
+
       {/* Metric Cards - 4x2 Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-none">
-        {metrics.map((metric, index) => (
-          <MetricCard key={index} metric={metric} />
-        ))}
-      </div>
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-none"
+        variants={fadeInUpVariants}
+      >
+        {loading
+          ? Array.from({ length: 8 }).map((_, index) => (
+              <MetricCardSkeleton key={index} />
+            ))
+          : metrics.map((metric, index) => (
+              <MetricCard key={index} metric={metric} />
+            ))}
+      </motion.div>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <motion.div
+        className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4"
+        variants={staggerContainerVariants}
+      >
         {/* Charts Area */}
-        <div className="lg:col-span-2 h-full min-h-0">
-          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
-            <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg font-bold">
-                  Trend Performa
-                </CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Analisis tren penjualan dan efektivitas iklan
-                </p>
-              </div>
-              <Tabs
-                value={activeChart}
-                onValueChange={(v) => setActiveChart(v as "sales" | "roas")}
-                className="w-full sm:w-[300px]"
-              >
-                <TabsList className="grid w-full grid-cols-2 bg-white/5">
-                  <TabsTrigger value="sales">Penjualan</TabsTrigger>
-                  <TabsTrigger value="roas">ROAS</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-              <ResponsiveContainer width="100%" height="100%">
-                {activeChart === "sales" ? (
-                  <ComposedChart
-                    data={salesTrendData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.3}
+        <motion.div
+          className="lg:col-span-2 h-full min-h-0"
+          variants={fadeInUpVariants}
+        >
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
+            <Card className="glass-card rounded-2xl h-full flex flex-col">
+              <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-primary" />
+                      Trend Performa
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {selectedIndicator === "sales" && "Tren total penjualan"}
+                      {selectedIndicator === "cost" && "Tren total biaya iklan"}
+                      {selectedIndicator === "roas" && "Tren efektivitas ROAS"}
+                      {selectedIndicator === "orders" && "Tren jumlah pesanan"}
+                      {selectedIndicator === "visitors" &&
+                        "Tren jumlah pengunjung"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <MetricSelector
+                      value={selectedIndicator}
+                      onValueChange={(val) => setSelectedIndicator(val)}
+                      options={[
+                        { value: "sales", label: "Penjualan" },
+                        { value: "cost", label: "Biaya" },
+                        { value: "roas", label: "ROAS" },
+                      ]}
                     />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                      }}
-                      dy={10}
+                    <TabToggle
+                      items={availableGranularities.map((gran) => ({
+                        value: gran,
+                        label: granularityLabels[gran],
+                      }))}
+                      activeValue={selectedGranularity}
+                      onChange={(value) => setSelectedGranularity(value as any)}
+                      size="sm"
                     />
-                    <YAxis
-                      yAxisId="left"
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(val) =>
-                        val >= 1000000
-                          ? `${(val / 1000000).toFixed(0)}jt`
-                          : val >= 1000
-                          ? `${(val / 1000).toFixed(0)}rb`
-                          : val
-                      }
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                      }}
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(val) =>
-                        val >= 1000000
-                          ? `${(val / 1000000).toFixed(0)}jt`
-                          : val >= 1000
-                          ? `${(val / 1000).toFixed(0)}rb`
-                          : val
-                      }
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                      }}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        fontSize: "12px",
-                        borderRadius: "8px",
-                        padding: "8px",
-                      }}
-                    />
-                    <Legend iconSize={8} wrapperStyle={{ fontSize: "10px" }} />
-                    <Bar
-                      yAxisId="right"
-                      dataKey="biaya"
-                      name="Biaya"
-                      fill="#f97316"
-                      radius={[2, 2, 0, 0]}
-                      barSize={16}
-                    />
-                    <Area
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="penjualan"
-                      name="Penjualan"
-                      stroke="#3b82f6"
-                      fill="#3b82f6"
-                      fillOpacity={0.1}
-                      strokeWidth={2}
-                    />
-                  </ComposedChart>
-                ) : (
-                  <AreaChart
-                    data={roasTrendData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorRoas"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#a855f7"
-                          stopOpacity={0.3}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
+                <AnimatePresence mode="wait">
+                  {loading || isTrendDataEmpty ? (
+                    <motion.div
+                      key="empty"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
+                    >
+                      {loading ? (
+                        <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <span className="text-xs font-medium">
+                            Memuat grafik...
+                          </span>
+                        </div>
+                      ) : (
+                        <ChartEmptyState
+                          title="Data Tren Belum Tersedia"
+                          message="Upload data untuk melihat grafik tren."
                         />
-                        <stop
-                          offset="95%"
-                          stopColor="#a855f7"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.3}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                      }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(val) => `${val}x`}
-                      tick={{
-                        fontSize: 10,
-                        fill: "hsl(var(--muted-foreground))",
-                      }}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => `${value.toFixed(2)}x`}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        fontSize: "12px",
-                        borderRadius: "8px",
-                        padding: "8px",
-                      }}
-                    />
-                    <Legend
-                      verticalAlign="top"
-                      height={36}
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: "12px", paddingTop: "0px" }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="roas"
-                      name="ROAS"
-                      stroke="#a855f7"
-                      fillOpacity={1}
-                      fill="url(#colorRoas)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                )}
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={`${selectedIndicator}-${selectedGranularity}`}
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full w-full"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={aggregatedTrendData}
+                          margin={chartLayout.large.margin}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="colorChart"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset={chartGradients.primary.start.offset}
+                                stopColor={
+                                  selectedIndicator === "cost"
+                                    ? chartColors.orange
+                                    : selectedIndicator === "roas"
+                                    ? chartColors.purple
+                                    : chartColors.primary
+                                }
+                                stopOpacity={
+                                  chartGradients.primary.start.opacity
+                                }
+                              />
+                              <stop
+                                offset={chartGradients.primary.end.offset}
+                                stopColor={
+                                  selectedIndicator === "cost"
+                                    ? chartColors.orange
+                                    : selectedIndicator === "roas"
+                                    ? chartColors.purple
+                                    : chartColors.primary
+                                }
+                                stopOpacity={chartGradients.primary.end.opacity}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray={
+                              chartUI.cartesianGrid.strokeDasharray
+                            }
+                            vertical={chartUI.cartesianGrid.vertical}
+                            opacity={chartUI.cartesianGrid.opacity}
+                          />
+                          <XAxis
+                            dataKey="key"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={chartTypography.axisLabel}
+                            tickMargin={10}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(val) =>
+                              selectedIndicator === "roas"
+                                ? `${val}x`
+                                : formatAxisValue(val)
+                            }
+                            tick={chartTypography.axisLabel}
+                            tickMargin={8}
+                            width={chartLayout.large.yAxisWidth}
+                          />
+                          <Tooltip
+                            content={
+                              <ChartTooltip
+                                type="auto"
+                                indicator={selectedIndicator}
+                              />
+                            }
+                            cursor={{ stroke: chartUI.cursor.stroke }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            name={
+                              selectedIndicator === "sales"
+                                ? "Penjualan"
+                                : selectedIndicator === "cost"
+                                ? "Biaya"
+                                : "ROAS"
+                            }
+                            stroke={
+                              selectedIndicator === "cost"
+                                ? chartColors.orange
+                                : selectedIndicator === "roas"
+                                ? chartColors.purple
+                                : chartColors.primary
+                            }
+                            fillOpacity={1}
+                            fill="url(#colorChart)"
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            animationDuration={chartAnimation.duration}
+                            animationEasing={chartAnimation.easing}
+                            activeDot={{
+                              r: chartUI.activeDot.r,
+                              fill: chartUI.activeDot.fill,
+                              stroke: chartUI.activeDot.stroke,
+                              strokeWidth: chartUI.activeDot.strokeWidth,
+                              style: { filter: chartUI.activeDot.filter },
+                            }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
 
         {/* Top Products Table */}
-        <div className="lg:col-span-1 h-full min-h-0 overflow-hidden">
-          <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
-            <CardHeader className="py-3 px-4 flex-none border-b border-white/10 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-bold">
-                  Top 10 Produk
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Diurutkan berdasarkan{" "}
-                  <span className="font-semibold text-primary">
-                    {sortBy === "penjualan"
-                      ? "Penjualan"
-                      : sortBy === "biaya"
-                      ? "Biaya"
-                      : "ROAS"}
-                  </span>
-                </p>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 hover:bg-white/10"
-                  >
-                    <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setSortBy("penjualan")}>
-                    Penjualan Tertinggi
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortBy("biaya")}>
-                    Biaya Tertinggi
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSortBy("roas")}>
-                    ROAS Tertinggi
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-auto min-h-0 p-0 scrollbar-hide">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-md z-10 shadow-sm">
-                  <TableRow className="border-none hover:bg-transparent">
-                    <TableHead className="w-[45%] text-[10px] h-9">
-                      Produk
-                    </TableHead>
-                    <TableHead className="text-right text-[10px] h-9">
-                      ROAS
-                    </TableHead>
-                    <TableHead className="text-right text-[10px] h-9">
-                      Penjualan
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topProducts.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={3}
-                        className="text-center text-muted-foreground h-24 text-xs"
-                      >
-                        Tidak ada data
-                      </TableCell>
+        <motion.div
+          className="lg:col-span-1 h-full min-h-0 overflow-hidden"
+          variants={fadeInUpVariants}
+        >
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
+            <Card className="glass-card rounded-2xl h-full flex flex-col">
+              <CardHeader className="py-3 px-4 flex-none border-b border-white/10 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold">
+                    Top 10 Produk
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Diurutkan berdasarkan{" "}
+                    <span className="font-semibold text-primary">
+                      {sortBy === "penjualan"
+                        ? "Penjualan"
+                        : sortBy === "biaya"
+                        ? "Biaya"
+                        : "ROAS"}
+                    </span>
+                  </p>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-white/10"
+                    >
+                      <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setSortBy("penjualan")}>
+                      Penjualan Tertinggi
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSortBy("biaya")}>
+                      Biaya Tertinggi
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSortBy("roas")}>
+                      ROAS Tertinggi
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-auto min-h-0 p-0 scrollbar-hide">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-md z-10 shadow-sm">
+                    <TableRow className="border-none hover:bg-transparent">
+                      <TableHead className="w-[45%] text-[10px] h-9">
+                        Produk
+                      </TableHead>
+                      <TableHead className="text-right text-[10px] h-9">
+                        ROAS
+                      </TableHead>
+                      <TableHead className="text-right text-[10px] h-9">
+                        Penjualan
+                      </TableHead>
                     </TableRow>
-                  ) : (
-                    topProducts
-                      .sort((a, b) => {
-                        if (sortBy === "penjualan")
-                          return b.penjualan - a.penjualan;
-                        if (sortBy === "biaya") return b.biaya - a.biaya;
-                        if (sortBy === "roas") return b.roas - a.roas;
-                        return 0;
-                      })
-                      .map((product, index) => (
-                        <TableRow
-                          key={index}
-                          className="hover:bg-white/5 border-white/5"
+                  </TableHeader>
+                  <TableBody>
+                    {topProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={3}
+                          className="text-center text-muted-foreground h-24 text-xs"
                         >
-                          <TableCell className="font-medium py-2">
-                            <div
-                              className="line-clamp-2 text-[11px] leading-tight"
-                              title={product.nama_iklan}
-                            >
-                              {product.nama_iklan}
-                            </div>
-                            <div className="text-[9px] text-muted-foreground mt-0.5">
-                              Cost: {formatShortCurrency(product.biaya)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-bold align-top py-2 text-xs">
-                            {product.roas.toFixed(1)}x
-                          </TableCell>
-                          <TableCell className="text-right align-top py-2">
-                            <div className="font-semibold text-blue-500 text-xs">
-                              {formatShortCurrency(product.penjualan)}
-                            </div>
-                            <div className="text-[9px] text-muted-foreground mt-0.5">
-                              CR: {product.convertion_rate.toFixed(1)}%
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+                          Tidak ada data
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      topProducts
+                        .sort((a, b) => {
+                          if (sortBy === "penjualan")
+                            return b.penjualan - a.penjualan;
+                          if (sortBy === "biaya") return b.biaya - a.biaya;
+                          if (sortBy === "roas") return b.roas - a.roas;
+                          return 0;
+                        })
+                        .map((product, index) => (
+                          <TableRow
+                            key={index}
+                            className="hover:bg-white/5 border-white/5"
+                          >
+                            <TableCell className="font-medium py-2">
+                              <div
+                                className="line-clamp-2 text-[11px] leading-tight"
+                                title={product.nama_iklan}
+                              >
+                                {product.nama_iklan}
+                              </div>
+                              <div className="text-[9px] text-muted-foreground mt-0.5">
+                                Cost: {formatShortCurrency(product.biaya)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-bold align-top py-2 text-xs">
+                              {product.roas.toFixed(1)}x
+                            </TableCell>
+                            <TableCell className="text-right align-top py-2">
+                              <div className="font-semibold text-blue-500 text-xs">
+                                {formatShortCurrency(product.penjualan)}
+                              </div>
+                              <div className="text-[9px] text-muted-foreground mt-0.5">
+                                CR: {product.convertion_rate.toFixed(1)}%
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
 
