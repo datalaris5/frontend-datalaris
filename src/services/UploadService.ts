@@ -12,7 +12,7 @@
 import apiClient from "./axios";
 import type { AxiosResponse } from "axios";
 
-type UploadType = "overview" | "ads" | "chat";
+type UploadType = "overview" | "orders" | "ads" | "chat";
 
 export const UploadService = {
   send: (
@@ -32,6 +32,8 @@ export const UploadService = {
       endpoint = `/admin/upload/iklan/${storeId}`;
     } else if (type === "chat") {
       endpoint = `/admin/upload/chat/${storeId}`;
+    } else if (type === "orders") {
+      endpoint = `/admin/upload/pesanan/${storeId}`;
     } else {
       return Promise.reject(
         new Error("Tipe data ini belum didukung untuk upload.")
