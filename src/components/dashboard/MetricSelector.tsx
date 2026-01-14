@@ -6,13 +6,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TrendIndicator } from "@/hooks/useEnhancedTrendChart";
+
+export type MetricOption = {
+  value: string;
+  label: string;
+};
 
 interface MetricSelectorProps {
-  value: TrendIndicator;
-  onValueChange: (value: TrendIndicator) => void;
+  value: string;
+  onValueChange: (value: any) => void;
   className?: string;
+  options?: MetricOption[];
 }
+
+const defaultOptions: MetricOption[] = [
+  { value: "sales", label: "Penjualan" },
+  { value: "orders", label: "Pesanan" },
+  { value: "visitors", label: "Pengunjung" },
+  { value: "conversionRate", label: "Conversion Rate" },
+  { value: "basketSize", label: "Basket Size" },
+];
 
 /**
  * MetricSelector
@@ -24,48 +37,25 @@ export function MetricSelector({
   value,
   onValueChange,
   className,
+  options = defaultOptions,
 }: MetricSelectorProps) {
   return (
-    <Select
-      value={value}
-      onValueChange={(val) => onValueChange(val as TrendIndicator)}
-    >
+    <Select value={value} onValueChange={onValueChange}>
       <SelectTrigger
         className={`w-[200px] border border-white/10 text-foreground font-medium shadow-sm hover:bg-white/5 active:scale-[0.98] transition-all bg-black/5 dark:bg-white/5 backdrop-blur-md hover:text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary/50 data-[state=open]:bg-white/10 rounded-xl ${className}`}
       >
         <SelectValue placeholder="Pilih Indikator" />
       </SelectTrigger>
       <SelectContent className="glass-card border-white/10 backdrop-blur-xl">
-        <SelectItem
-          value="sales"
-          className="focus:bg-primary/10 focus:text-primary cursor-pointer"
-        >
-          Penjualan
-        </SelectItem>
-        <SelectItem
-          value="orders"
-          className="focus:bg-primary/10 focus:text-primary cursor-pointer"
-        >
-          Pesanan
-        </SelectItem>
-        <SelectItem
-          value="visitors"
-          className="focus:bg-primary/10 focus:text-primary cursor-pointer"
-        >
-          Pengunjung
-        </SelectItem>
-        <SelectItem
-          value="conversionRate"
-          className="focus:bg-primary/10 focus:text-primary cursor-pointer"
-        >
-          Conversion Rate
-        </SelectItem>
-        <SelectItem
-          value="basketSize"
-          className="focus:bg-primary/10 focus:text-primary cursor-pointer"
-        >
-          Basket Size
-        </SelectItem>
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className="focus:bg-primary/10 focus:text-primary cursor-pointer"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
