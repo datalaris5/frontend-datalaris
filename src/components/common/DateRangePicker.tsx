@@ -29,6 +29,8 @@ import {
   isAfter,
   isBefore,
   isToday,
+  endOfYear,
+  subYears,
 } from "date-fns";
 import { id } from "date-fns/locale";
 import {
@@ -364,6 +366,10 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       end = endOfMonth(lastMonth); // Override end date for this case
     } else if (label === "Tahun Ini") {
       start = startOfYear(new Date());
+    } else if (label === "Tahun Lalu") {
+      const lastYear = subYears(new Date(), 1);
+      start = startOfYear(lastYear);
+      end = endOfYear(lastYear);
     } else if (typeof days === "number") {
       start = subDays(end, days - 1);
     }
@@ -394,7 +400,9 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
     { l: "30 Hari Terakhir", d: 30 },
     { l: "Bulan Ini", d: "month" },
     { l: "Bulan Lalu", d: "last_month" },
+
     { l: "Tahun Ini", d: "year" },
+    { l: "Tahun Lalu", d: "last_year" },
   ] as const;
 
   return (

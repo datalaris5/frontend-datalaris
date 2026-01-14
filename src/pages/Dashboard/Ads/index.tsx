@@ -1,58 +1,25 @@
-/**
- * Dashboard Ads
- * -------------
- * Halaman analisis performa iklan Shopee/TikTok.
- *
- * Metrik Utama (8 cards):
- * - Total Penjualan, Total Biaya Iklan, ROAS, AOV Iklan
- * - Total Dilihat, Persentase Klik (CTR), Convertion Rate, CPA
- *
- * Charts:
- * - Trend Performa (Composed Chart: Sales vs Cost, atau ROAS Area)
- * - Top 10 Produk Table
- *
- * Data Flow:
- * - Fetch dari API ads (penjualan, biaya, roas, ctr, cr, impressions)
- * - Multi-store aggregation jika store="all"
- */
-
 import React, { useState, useEffect } from "react";
+import { Upload, TrendingUp, Loader2, ArrowUpDown } from "lucide-react";
 import {
-  LineChart,
-  Line,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
-  ComposedChart,
-  Area,
-  AreaChart,
+  ResponsiveContainer,
 } from "recharts";
-import {
-  Megaphone,
-  MousePointer,
-  Eye,
-  DollarSign,
-  TrendingUp,
-  Target,
-  Upload,
-  ArrowUpDown,
-  LucideIcon,
-  Loader2,
-} from "lucide-react";
+import { useAdsTopProducts, TopProduct } from "@/hooks/useAdsTopProducts";
+import { useAdsData } from "@/hooks/useAdsData";
 import {
   chartColors,
-  chartUI,
   chartGradients,
   chartLayout,
   chartTypography,
   chartHeaderIcons,
   chartContent,
   chartAnimation,
+  chartUI,
 } from "@/config/chartTheme";
 import ChartTooltip from "@/components/common/ChartTooltip";
 import { formatAxisValue } from "@/utils/chartUtils";
@@ -74,7 +41,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DateRangePicker from "@/components/common/DateRangePicker";
 import { motion } from "framer-motion";
 import {
@@ -82,17 +48,13 @@ import {
   fadeInUpVariants,
   chartContentVariants,
 } from "@/config/animationConfig";
-import FeatureNotReady from "@/components/common/FeatureNotReady";
-import { format } from "date-fns";
-import CountUp from "react-countup";
-import MetricCard from "@/components/dashboard/MetricCard";
 import {
   MetricCardSkeleton,
   ChartSkeleton,
   ChartEmptyState,
   InsightBanner,
 } from "@/components/dashboard";
-import { MetricColor, DashboardMetric } from "@/types/dashboard.types";
+import MetricCard from "@/components/dashboard/MetricCard";
 import { AnimatePresence } from "framer-motion";
 import { MetricSelector } from "@/components/dashboard/MetricSelector";
 import TabToggle from "@/components/ui/TabToggle";
@@ -102,7 +64,6 @@ import {
   TimeGranularity,
   granularityLabels,
 } from "@/utils/timeAggregation";
-import { useAdsData } from "@/hooks/useAdsData";
 
 // === MAIN COMPONENT ===
 
@@ -110,8 +71,11 @@ const DashboardAds: React.FC = () => {
   const { store, stores, dateRange } = useFilter();
   const navigate = useNavigate();
 
-  // Custom Hook for Data Fetching
-  const { metrics, loading, topProducts, chartData } = useAdsData();
+  // 1. Metrics & Charts Hook
+  const { metrics, chartData, loading: isLoading } = useAdsData();
+
+  // 2. Top Products Hook (Separate)
+  const { topProducts, loading: topProductsLoading } = useAdsTopProducts();
 
   // Chart State
   const [selectedIndicator, setSelectedIndicator] = useState<string>("sales");
@@ -154,6 +118,18 @@ const DashboardAds: React.FC = () => {
         sourceData = chartData.roas || [];
         type = "average";
         break;
+      case "impressions":
+        sourceData = chartData.impressions || [];
+        type = "sum";
+        break;
+      case "ctr":
+        sourceData = chartData.ctr || [];
+        type = "average";
+        break;
+      case "cr":
+        sourceData = chartData.cr || [];
+        type = "average";
+        break;
       default:
         sourceData = [];
     }
@@ -171,19 +147,12 @@ const DashboardAds: React.FC = () => {
 
   // Empty State Logic
   const isTrendDataEmpty = React.useMemo(() => {
-    if (loading) return false;
+    if (isLoading) return false;
     return (
       aggregatedTrendData.length === 0 ||
       aggregatedTrendData.every((d) => d.value === 0)
     );
-  }, [aggregatedTrendData, loading]);
-
-  const formatCurrency = (val: number): string =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(val);
+  }, [aggregatedTrendData, isLoading]);
 
   const formatShortCurrency = (val: number): string => {
     if (val >= 1000000) return `Rp${(val / 1000000).toFixed(1)}jt`;
@@ -226,7 +195,7 @@ const DashboardAds: React.FC = () => {
 
       {/* Quick Insight Banner */}
       <motion.div variants={fadeInUpVariants}>
-        <InsightBanner metrics={metrics} loading={loading} />
+        <InsightBanner metrics={metrics} loading={isLoading} />
       </motion.div>
 
       {/* Metric Cards - 4x2 Grid */}
@@ -234,12 +203,12 @@ const DashboardAds: React.FC = () => {
         className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-none"
         variants={fadeInUpVariants}
       >
-        {loading
+        {isLoading
           ? Array.from({ length: 8 }).map((_, index) => (
               <MetricCardSkeleton key={index} />
             ))
           : metrics.map((metric, index) => (
-              <MetricCard key={index} metric={metric} />
+              <MetricCard key={index} metric={metric} staggerIndex={index} />
             ))}
       </motion.div>
 
@@ -253,7 +222,7 @@ const DashboardAds: React.FC = () => {
           className="lg:col-span-2 h-full min-h-0"
           variants={fadeInUpVariants}
         >
-          {loading ? (
+          {isLoading ? (
             <ChartSkeleton />
           ) : (
             <Card className="glass-card rounded-2xl h-full flex flex-col">
@@ -268,9 +237,10 @@ const DashboardAds: React.FC = () => {
                       {selectedIndicator === "sales" && "Tren total penjualan"}
                       {selectedIndicator === "cost" && "Tren total biaya iklan"}
                       {selectedIndicator === "roas" && "Tren efektivitas ROAS"}
-                      {selectedIndicator === "orders" && "Tren jumlah pesanan"}
-                      {selectedIndicator === "visitors" &&
-                        "Tren jumlah pengunjung"}
+                      {selectedIndicator === "impressions" &&
+                        "Tren jumlah dilihat"}
+                      {selectedIndicator === "ctr" && "Tren Click-Through Rate"}
+                      {selectedIndicator === "cr" && "Tren Conversion Rate"}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -281,6 +251,9 @@ const DashboardAds: React.FC = () => {
                         { value: "sales", label: "Penjualan" },
                         { value: "cost", label: "Biaya" },
                         { value: "roas", label: "ROAS" },
+                        { value: "impressions", label: "Dilihat" },
+                        { value: "ctr", label: "CTR" },
+                        { value: "cr", label: "CR" },
                       ]}
                     />
                     <TabToggle
@@ -297,7 +270,7 @@ const DashboardAds: React.FC = () => {
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
                 <AnimatePresence mode="wait">
-                  {loading || isTrendDataEmpty ? (
+                  {isLoading || isTrendDataEmpty ? (
                     <motion.div
                       key="empty"
                       variants={chartContentVariants}
@@ -306,7 +279,7 @@ const DashboardAds: React.FC = () => {
                       exit="exit"
                       className="h-full"
                     >
-                      {loading ? (
+                      {isLoading ? (
                         <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
                           <Loader2 className="w-8 h-8 animate-spin text-primary" />
                           <span className="text-xs font-medium">
@@ -412,7 +385,9 @@ const DashboardAds: React.FC = () => {
                                 ? "Penjualan"
                                 : selectedIndicator === "cost"
                                 ? "Biaya"
-                                : "ROAS"
+                                : selectedIndicator === "roas"
+                                ? "ROAS"
+                                : selectedIndicator
                             }
                             stroke={
                               selectedIndicator === "cost"
@@ -450,7 +425,7 @@ const DashboardAds: React.FC = () => {
           className="lg:col-span-1 h-full min-h-0 overflow-hidden"
           variants={fadeInUpVariants}
         >
-          {loading ? (
+          {isLoading ? (
             <ChartSkeleton />
           ) : (
             <Card className="glass-card rounded-2xl h-full flex flex-col">
@@ -509,17 +484,17 @@ const DashboardAds: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {topProducts.length === 0 ? (
+                    {(topProducts || []).length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={3}
                           className="text-center text-muted-foreground h-24 text-xs"
                         >
-                          Tidak ada data
+                          {topProductsLoading ? "Memuat..." : "Tidak ada data"}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      topProducts
+                      (topProducts || [])
                         .sort((a, b) => {
                           if (sortBy === "penjualan")
                             return b.penjualan - a.penjualan;
@@ -567,7 +542,5 @@ const DashboardAds: React.FC = () => {
     </motion.div>
   );
 };
-
-// === METRIC CARD COMPONENT REMOVED (Using reusable component)
 
 export default DashboardAds;

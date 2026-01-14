@@ -31,14 +31,6 @@ export interface AdsChartData {
   cr: TimeDataPoint[];
 }
 
-export interface TopProduct {
-  nama_iklan: string;
-  penjualan: number;
-  biaya: number;
-  roas: number;
-  convertion_rate: number;
-}
-
 // Initial Metrics Configuration
 const initialMetricsConfig: DashboardMetric[] = [
   {
@@ -267,26 +259,9 @@ export const useAdsData = () => {
       mapToMetric(5, totals.ctr, aggregatedData.ctr);
       mapToMetric(6, totals.cr, aggregatedData.cr);
 
-      // 5. Fetch Top Products (if single store)
-      let topProductsData: TopProduct[] = [];
-      if (store !== "all") {
-        try {
-          // Re-use single store logic
-          const s = targetStores[0];
-          if (s) {
-            const payload = buildPayload(s.id!, s.marketplace_id || 1, dates);
-            const res = await api.ads.topProducts(payload);
-            topProductsData = res.data?.data || [];
-          }
-        } catch (e) {
-          console.error("Failed top products", e);
-        }
-      }
-
       return {
         metrics,
         chartData: aggregatedData,
-        topProducts: topProductsData,
       };
     },
     enabled:
@@ -297,7 +272,6 @@ export const useAdsData = () => {
   return {
     metrics: query.data?.metrics || initialMetricsConfig,
     chartData: query.data?.chartData,
-    topProducts: query.data?.topProducts || [],
     loading: query.isLoading,
   };
 };

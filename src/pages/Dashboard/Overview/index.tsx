@@ -12,11 +12,10 @@
  * - Analisa Operasional (Bar Chart) - Orders by day of week
  *
  * Data Flow (React Query Pattern):
- * 1. useDashboardMetrics() - Auto fetch metrics dengan caching
- * 2. useOverviewChartData() - Auto fetch chart data (full year)
- * 3. Error handling otomatis dengan toast notifications
- * 4. Skeleton loading untuk better UX
- * 5. Multi-store aggregation via hooks
+ * 1. useOverviewData() - Consolidated hook for metrics & charts
+ * 2. Error handling otomatis dengan toast notifications
+ * 3. Skeleton loading untuk better UX
+ * 4. Multi-store aggregation via hooks
  */
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -74,14 +73,13 @@ import {
 } from "@/components/dashboard";
 
 // React Query hooks
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
-import { useOverviewChartData } from "@/hooks/useOverviewChartData";
+// Custom Hook
 import {
-  useEnhancedTrendChart,
+  useOverviewData,
+  OverviewTrendIndicator,
   indicatorLabels,
-  indicatorFormats,
-  type TrendIndicator,
-} from "@/hooks/useEnhancedTrendChart";
+} from "@/hooks/useOverviewData";
+// Removed legacy imports
 
 // Skeleton components
 
@@ -119,65 +117,37 @@ const DashboardOverview: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // React Query hook untuk metrics (replaces 205 baris manual fetch!)
-  const {
-    data: metricsData,
-    isLoading: metricsLoading,
-    error: metricsError,
-  } = useDashboardMetrics();
+  // React Query Hook (Consolidated)
+  const { metrics, trendData, loading: isLoading, error } = useOverviewData();
 
-  // React Query hook untuk chart data (replaces ~100 baris manual fetch!)
-  const {
-    data: chartData,
-    isLoading: chartLoading,
-    error: chartError,
-  } = useOverviewChartData();
-
-  // Enhanced Trend Chart hook (multi-indicator sparklines)
-  const { data: trendData, isLoading: trendLoading } = useEnhancedTrendChart();
-
-  // Chart state - Enhanced
+  // Chart state
   const [selectedIndicator, setSelectedIndicator] =
-    useState<TrendIndicator>("sales");
+    useState<OverviewTrendIndicator>("sales");
   const [selectedGranularity, setSelectedGranularity] =
     useState<TimeGranularity>("monthly");
 
-  // Legacy chart state (untuk backward compatibility)
-  const [salesData, setSalesData] = useState<SalesDataPoint[]>([]);
-  const [salesViewMode, setSalesViewMode] = useState<"monthly" | "quarterly">(
-    "monthly"
-  );
-  const [activeChartTab, setActiveChartTab] = useState<ChartDataKey>("sales");
-  const [monthlyChartData, setMonthlyChartData] = useState<SalesDataPoint[]>(
-    []
-  );
-
-  // New Hook: Operational Chart Data
+  // New Hook: Operational Chart Data (Separate API)
   const { data: ordersDayData = [], isLoading: operationalLoading } =
     useOperationalChartData();
-
-  // Helper: Cek apakah chart data kosong (semua value = 0)
-  const isSalesDataEmpty = useMemo(() => {
-    if (salesData.length === 0) return true;
-    return salesData.every((d) => d.sales === 0 && d.orders === 0);
-  }, [salesData]);
 
   const isOrdersDayDataEmpty = useMemo(() => {
     if (ordersDayData.length === 0) return true;
     return ordersDayData.every((d) => d.orders === 0);
   }, [ordersDayData]);
 
-  // Enhanced: Get aggregated trend data berdasarkan selected indicator dan granularity
+  // Aggregated trend data based on selection
   const aggregatedTrendData = useMemo((): AggregatedDataPoint[] => {
     if (!trendData) return [];
-    const rawData = trendData[selectedIndicator] || [];
+
+    // Type safer access
+    const indicatorKey = selectedIndicator as keyof typeof trendData;
+    const rawData = trendData[indicatorKey] || [];
 
     // Determine aggregation type: "average" for rates/sizes, "sum" for totals
     const aggType = ["conversionRate", "basketSize"].includes(selectedIndicator)
       ? "average"
       : "sum";
 
-    // Fix: Pass start and end date for zero-filling continuous time series, and aggregation type
     return aggregateData(
       rawData,
       selectedGranularity,
@@ -187,15 +157,16 @@ const DashboardOverview: React.FC = () => {
     );
   }, [trendData, selectedIndicator, selectedGranularity, dateRange]);
 
-  // Enhanced: Check if trend data is empty (all zeros)
+  // Check if trend data is empty
   const isTrendDataEmpty = useMemo(() => {
-    if (trendLoading || !trendData) return true;
-    const rawData = trendData[selectedIndicator] || [];
+    if (isLoading || !trendData) return true;
+    const indicatorKey = selectedIndicator as keyof typeof trendData;
+    const rawData = trendData[indicatorKey] || [];
     if (rawData.length === 0) return true;
     return rawData.every((d) => d.total === 0);
-  }, [trendLoading, trendData, selectedIndicator]);
+  }, [isLoading, trendData, selectedIndicator]);
 
-  // Enhanced: Get available granularity options berdasarkan date range
+  // Auto-detect granularity
   const availableGranularities = useMemo((): TimeGranularity[] => {
     if (!dateRange?.startDate || !dateRange?.endDate) return ["monthly"];
     return getAvailableGranularities(
@@ -204,218 +175,27 @@ const DashboardOverview: React.FC = () => {
     );
   }, [dateRange]);
 
-  // Enhanced: Auto-detect granularity saat date range berubah
   useEffect(() => {
     if (dateRange?.startDate && dateRange?.endDate) {
       const autoGranularity = getAutoGranularity(
         new Date(dateRange.startDate),
         new Date(dateRange.endDate)
       );
-      // Hanya auto-set jika granularity sekarang tidak available
       if (!availableGranularities.includes(selectedGranularity)) {
         setSelectedGranularity(autoGranularity);
       }
     }
   }, [dateRange, availableGranularities, selectedGranularity]);
 
-  // Metrics state
-  const [metrics, setMetrics] = useState<DashboardMetric[]>([
-    {
-      title: "Total Penjualan",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Banknote,
-      highlight: false, // Unified glass - no solid highlight
-      isDummy: false,
-      color: "orange", // Primary KPI accent
-    },
-    {
-      title: "Total Pesanan",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingCart,
-      isDummy: false,
-      color: "blue",
-    },
-    {
-      title: "Convertion Rate",
-      value: 0,
-      format: "percent",
-      trend: "0%",
-      trendUp: false,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Percent,
-      isDummy: false,
-      color: "purple",
-    },
-    {
-      title: "Basket Size",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingBasket,
-      isDummy: false,
-      color: "emerald",
-    },
-    {
-      title: "Total Pengunjung",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: false,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: UsersRound,
-      isDummy: false,
-      color: "cyan",
-    },
-    {
-      title: "Pembeli Baru",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: UserPlus,
-      isDummy: true, // API endpoint belum tersedia
-      color: "pink",
-    },
-  ]);
-
-  // Update metrics state when metricsData changes
+  // Error handling
   useEffect(() => {
-    if (!metricsData) return;
-
-    // Helper removed: Logic dipindah ke dashboardHelpers.ts (Zero Placeholder Strategy)
-
-    setMetrics((prev) => {
-      const newMetrics = [...prev];
-
-      // Update dari metricsData (React Query result)
-      if (metricsData.sales) {
-        newMetrics[0] = {
-          ...newMetrics[0],
-          value: metricsData.sales.current,
-          previousValue: metricsData.sales.previous,
-          trend: `${metricsData.sales.percent?.toFixed(1) || 0}%`,
-          trendUp: (metricsData.sales.percent || 0) >= 0,
-          data: metricsData.sales.sparkline?.map((d) => Number(d.total)) || [
-            0, 0, 0, 0, 0, 0, 0,
-          ],
-          isDummy: false,
-        };
-      }
-
-      if (metricsData.orders) {
-        newMetrics[1] = {
-          ...newMetrics[1],
-          value: metricsData.orders.current,
-          previousValue: metricsData.orders.previous,
-          trend: `${metricsData.orders.percent?.toFixed(1) || 0}%`,
-          trendUp: (metricsData.orders.percent || 0) >= 0,
-          data: metricsData.orders.sparkline?.map((d) => Number(d.total)) || [
-            0, 0, 0, 0, 0, 0, 0,
-          ],
-          isDummy: false,
-        };
-      }
-
-      if (metricsData.cr) {
-        newMetrics[2] = {
-          ...newMetrics[2],
-          value: metricsData.cr.current,
-          previousValue: metricsData.cr.previous,
-          trend: `${metricsData.cr.percent?.toFixed(1) || 0}%`,
-          trendUp: (metricsData.cr.percent || 0) >= 0,
-          // Fix: Map sparkline data correctly instead of hardcoded 0s
-          data: metricsData.cr.sparkline?.map((d) => Number(d.total)) || [
-            0, 0, 0, 0, 0, 0, 0,
-          ],
-          isDummy: false,
-        };
-      }
-
-      if (metricsData.bs) {
-        newMetrics[3] = {
-          ...newMetrics[3],
-          value: metricsData.bs.current,
-          previousValue: metricsData.bs.previous,
-          trend: `${metricsData.bs.percent?.toFixed(1) || 0}%`,
-          trendUp: (metricsData.bs.percent || 0) >= 0,
-          // Fix: Map sparkline data correctly
-          data: metricsData.bs.sparkline?.map((d) => Number(d.total)) || [
-            0, 0, 0, 0, 0, 0, 0,
-          ],
-          isDummy: false,
-        };
-      }
-
-      if (metricsData.visitors) {
-        newMetrics[4] = {
-          ...newMetrics[4],
-          value: metricsData.visitors.current,
-          previousValue: metricsData.visitors.previous,
-          trend: `${metricsData.visitors.percent?.toFixed(1) || 0}%`,
-          trendUp: (metricsData.visitors.percent || 0) >= 0,
-          data: metricsData.visitors.sparkline?.map((d) => Number(d.total)) || [
-            0, 0, 0, 0, 0, 0, 0,
-          ],
-          isDummy: false,
-        };
-      }
-
-      return newMetrics;
-    });
-  }, [metricsData, dateRange]);
-
-  // Error handling untuk metrics
-  useEffect(() => {
-    if (metricsError) {
-      toast.error("Gagal memuat data metrik. Silakan coba lagi.", {
+    if (error) {
+      toast.error("Gagal memuat data dashboard. Silakan coba lagi.", {
         duration: 4000,
         position: "top-right",
       });
     }
-  }, [metricsError]);
-  // Error handling untuk charts
-  useEffect(() => {
-    if (chartError) {
-      toast.error("Gagal memuat data chart. Silakan coba lagi.", {
-        duration: 4000,
-        position: "top-right",
-      });
-    }
-  }, [chartError]);
-
-  // Update chart state dari React Query hook data
-  useEffect(() => {
-    // Jika chartData undefined (masih loading), jangan update state dulu
-    if (chartData === undefined) {
-      return;
-    }
-
-    // Set data (bisa kosong atau berisi) - penting untuk Empty State!
-    setMonthlyChartData(chartData);
-    setSalesData(chartData);
-  }, [chartData]);
-
-  // 4. Handle Sales View Mode Toggle
-  useEffect(() => {
-    if (monthlyChartData.length === 0) return;
-    if (salesViewMode === "quarterly") {
-      const quarterlyData = aggregateByQuarter(monthlyChartData);
-      setSalesData(quarterlyData);
-    } else {
-      setSalesData(monthlyChartData);
-    }
-  }, [salesViewMode, monthlyChartData]);
+  }, [error]);
 
   return (
     <motion.div
@@ -454,7 +234,7 @@ const DashboardOverview: React.FC = () => {
       {/* Quick Insight Banner */}
       {/* Quick Insight Banner */}
       <motion.div variants={fadeInUpVariants}>
-        <InsightBanner metrics={metrics} loading={metricsLoading} />
+        <InsightBanner metrics={metrics} loading={isLoading} />
       </motion.div>
 
       {/* Metrics Row */}
@@ -463,7 +243,7 @@ const DashboardOverview: React.FC = () => {
         className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 flex-none"
         variants={fadeInUpVariants}
       >
-        {metricsLoading
+        {isLoading
           ? // Skeleton loading state
             Array.from({ length: 6 }).map((_, index) => (
               <MetricCardSkeleton key={index} />
@@ -473,7 +253,7 @@ const DashboardOverview: React.FC = () => {
               <MetricCard
                 key={index}
                 metric={metric}
-                loading={metricsLoading}
+                loading={isLoading}
                 staggerIndex={index}
               />
             ))}
@@ -489,7 +269,7 @@ const DashboardOverview: React.FC = () => {
           className="lg:col-span-2 h-full min-h-0"
           variants={fadeInUpVariants}
         >
-          {chartLoading ? (
+          {isLoading ? (
             <ChartSkeleton />
           ) : (
             <Card className="glass-card rounded-2xl h-full flex flex-col">
@@ -537,7 +317,7 @@ const DashboardOverview: React.FC = () => {
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-6 px-6">
                 <AnimatePresence mode="wait">
-                  {trendLoading || isTrendDataEmpty ? (
+                  {isLoading || isTrendDataEmpty ? (
                     <motion.div
                       key="empty"
                       variants={chartContentVariants}
@@ -546,7 +326,7 @@ const DashboardOverview: React.FC = () => {
                       exit="exit"
                       className="h-full"
                     >
-                      {trendLoading ? (
+                      {isLoading ? (
                         <div className="h-full flex flex-col gap-2 items-center justify-center text-muted-foreground">
                           <Loader2 className="w-8 h-8 animate-spin text-primary" />
                           <span className="text-xs font-medium">
@@ -648,37 +428,6 @@ const DashboardOverview: React.FC = () => {
                               style: { filter: chartUI.activeDot.filter },
                             }}
                           />
-                          {/* Hidden areas for tooltip data */}
-                          {activeChartTab !== "sales" && (
-                            <Area
-                              type="monotone"
-                              dataKey="sales"
-                              name="Total Penjualan"
-                              stroke="transparent"
-                              fill="transparent"
-                              strokeWidth={0}
-                            />
-                          )}
-                          {activeChartTab !== "orders" && (
-                            <Area
-                              type="monotone"
-                              dataKey="orders"
-                              name="Total Pesanan"
-                              stroke="transparent"
-                              fill="transparent"
-                              strokeWidth={0}
-                            />
-                          )}
-                          {activeChartTab !== "basketSize" && (
-                            <Area
-                              type="monotone"
-                              dataKey="basketSize"
-                              name="Basket Size"
-                              stroke="transparent"
-                              fill="transparent"
-                              strokeWidth={0}
-                            />
-                          )}
                         </AreaChart>
                       </ResponsiveContainer>
                     </motion.div>
@@ -701,7 +450,7 @@ const DashboardOverview: React.FC = () => {
 
           {/* Analisa Operasional (bawah) */}
           <motion.div className="flex-1 min-h-0" variants={fadeInUpVariants}>
-            {chartLoading ? (
+            {isLoading ? (
               <ChartSkeleton />
             ) : (
               <Card className="glass-card h-full flex flex-col">

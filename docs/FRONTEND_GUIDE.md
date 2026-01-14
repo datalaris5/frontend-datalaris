@@ -133,77 +133,72 @@ Currency dan number formatters:
 
 **Struktur hook untuk dashboard metrics:**
 
+````typescript
 ```typescript
-// hooks/useDashboardMetrics.ts
+// hooks/useOverviewData.ts (Merged Hook Pattern)
 import { useQuery } from "@tanstack/react-query";
 import { useFilter } from "@/context/FilterContext";
 import { api } from "@/services/api";
-import {
-  getTargetStores,
-  formatDateRange,
-  buildPayload,
-  extractMetricData,
-  aggregateMetrics,
-} from "@/utils/dashboardHelpers";
 
-export function useDashboardMetrics() {
+export function useOverviewData() {
   const { store, stores, dateRange } = useFilter();
 
-  return useQuery({
-    queryKey: ["dashboard", "overview", "metrics", store, dateRange],
+  const query = useQuery({
+    queryKey: ["dashboard", "overview", "consolidated", store, dateRange],
     queryFn: async () => {
-      const targetStores = getTargetStores(store, stores);
-      if (!targetStores.length) return null;
+      // Parallel fetch metrics & charts
+      const [metrics, trendData] = await Promise.all([
+        // ... fetch logic
+      ]);
 
-      const dates = formatDateRange(dateRange);
-      const results = await Promise.all(
-        targetStores.map((s) =>
-          fetchStoreMetrics(s.id!, s.marketplace_id!, dates)
-        )
-      );
-
-      return results.length === 1 ? results[0] : aggregateMetrics(results);
+      return { metrics, trendData };
     },
-    enabled: !!dateRange?.startDate && stores.length > 0,
+    enabled: !!dateRange?.startDate && !!dateRange?.endDate && stores.length > 0,
   });
+
+  return {
+    metrics: query.data?.metrics || initialMetrics,
+    trendData: query.data?.trendData,
+    loading: query.isLoading,
+    error: query.error,
+  };
 }
-```
+````
 
 **Usage di component:**
 
 ```typescript
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { useOverviewData } from "@/hooks/useOverviewData";
 
 const DashboardOverview = () => {
-  // Hook handles everything: fetching, caching, loading, error
-  const { data: metricsData, isLoading, error } = useDashboardMetrics();
+  // Hook handles everything: flattened structure
+  const { metrics, trendData, loading } = useOverviewData();
 
-  // Update metrics state dari hook data
-  useEffect(() => {
-    if (!metricsData) return;
-    setMetrics((prev) => {
-      // Update logic here
-    });
-  }, [metricsData]);
+  if (loading) return <MetricCardSkeleton />;
+  // Render directly
 };
 ```
 
 ### Dashboard Migration Status
 
-| Dashboard               | Hooks Created                     | Migration Status | Code Reduction |
-| ----------------------- | --------------------------------- | ---------------- | -------------- |
-| **Overview (Tinjauan)** | ✅ Metrics + Charts               | ✅ Complete      | -340 baris     |
-| **Ads (Iklan)**         | ✅ useAdsDashboardMetrics (ready) | ⏳ Pending       | ~300 baris     |
-| **Chat**                | ⏳ To create                      | ⏳ Pending       | ~300 baris     |
-| **Orders**              | ⏳ To create                      | ⏳ Pending       | ~200 baris     |
-| **Products**            | ⏳ To create                      | ⏳ Pending       | ~150 baris     |
+| Dashboard               | Hooks Created                  | Migration Status | Code Reduction |
+| ----------------------- | ------------------------------ | ---------------- | -------------- |
+| **Overview (Tinjauan)** | ✅ Consolidated Hook           | ✅ Complete      | -340 baris     |
+| **Ads (Iklan)**         | ✅ Split Strategy (Data + Top) | ✅ Complete      | -300 baris     |
+| **Chat**                | ⏳ To create                   | ⏳ Pending       | ~300 baris     |
+| **Orders**              | ⏳ To create                   | ⏳ Pending       | ~200 baris     |
+| **Products**            | ⏳ To create                   | ⏳ Pending       | ~150 baris     |
 
 **Overview Details:**
 
-- Hooks: `useDashboardMetrics.ts`, `useOverviewChartData.ts`, `useOperationalChartData.ts`
-- Error handling: Toast notifications
-- Loading states: Skeleton components
-- Code: 853 → ~470 lines (45% reduction)
+- Core Hook: `useOverviewData` (Metrics + Trend Chart)
+- Secondary Hook: `useOperationalChartData` (Bar Chart - Separate API)
+- Status: Production-ready ✅
+
+**Ads Details:**
+
+- Core Hook: `useAdsData` (Metrics + Trend Chart)
+- Secondary Hook: `useAdsTopProducts` (Heavy Data Table - Separate)
 - Status: Production-ready ✅
 
 ### Migration Guide untuk Dashboard Lain
@@ -314,8 +309,9 @@ useQuery({
    ```
 
 3. **Complete Hook Integration**
-   - `useDashboardMetrics` untuk metrics
-   - `useOverviewChartData` untuk charts
+   - **Rule: One Data Source = One Hook**
+   - Merged: Metrics + Trend Sparkline (Same API) -> `useXData`
+   - Split: Heavy Tables / Different API -> `useXSecondaryData`
    - NO manual fetch logic remaining
    - 100% centralized pattern
 
@@ -1017,20 +1013,22 @@ Semua workflow tersimpan di: `.agent/workflows/`
 
 ## 📜 Changelog
 
-| Tanggal    | Perubahan                                                   |
-| ---------- | ----------------------------------------------------------- |
-| 2024-12-17 | React Query integration guide & Dashboard migration status  |
-| 2024-12-16 | Aturan ketat sentralisasi koding ditambahkan                |
-| 2024-12-16 | Config files ditambahkan: dashboardIcons.ts, themeConfig.ts |
-| 2024-12-15 | Reorganisasi docs ke folder /docs                           |
-| 2024-12-15 | AI Communication Protocol & Document Update Strategy        |
-| 2024-12-15 | Scope Protection Rules ditambahkan                          |
-| 2024-12-15 | Format header distandardisasi                               |
-| 2024-12-15 | API Catalog dibuat, API Update Protocol ditambahkan         |
-| 2024-12-15 | Store & Marketplace Service terintegrasi                    |
-| 2024-12-14 | Migrasi TypeScript 100% complete                            |
-| 2024-12-14 | Tambah deployment configs (vercel.json, netlify.toml)       |
-| 2024-12-14 | Dokumentasi aturan terpusat dan design system               |
+| Tanggal    | Perubahan                                                           |
+| ---------- | ------------------------------------------------------------------- |
+| 2024-12-17 | React Query integration guide & Dashboard migration status          |
+| 2026-01-14 | Update Dashboard Architecture (Split Strategy: One Source One Hook) |
+| 2024-12-17 | React Query integration guide & Dashboard migration status          |
+| 2024-12-16 | Aturan ketat sentralisasi koding ditambahkan                        |
+| 2024-12-16 | Config files ditambahkan: dashboardIcons.ts, themeConfig.ts         |
+| 2024-12-15 | Reorganisasi docs ke folder /docs                                   |
+| 2024-12-15 | AI Communication Protocol & Document Update Strategy                |
+| 2024-12-15 | Scope Protection Rules ditambahkan                                  |
+| 2024-12-15 | Format header distandardisasi                                       |
+| 2024-12-15 | API Catalog dibuat, API Update Protocol ditambahkan                 |
+| 2024-12-15 | Store & Marketplace Service terintegrasi                            |
+| 2024-12-14 | Migrasi TypeScript 100% complete                                    |
+| 2024-12-14 | Tambah deployment configs (vercel.json, netlify.toml)               |
+| 2024-12-14 | Dokumentasi aturan terpusat dan design system                       |
 
 ---
 
