@@ -109,14 +109,14 @@ import { queryClient } from "./lib/queryClient";
 
 Reusable helpers untuk semua dashboard:
 
-| Function              | Purpose                        | Usage                                         |
-| --------------------- | ------------------------------ | --------------------------------------------- |
-| `getTargetStores()`   | Filter stores (single/all)     | `getTargetStores(store, stores)`              |
-| `formatDateRange()`   | Format date untuk API          | `formatDateRange(dateRange)`                  |
-| `buildPayload()`      | Build API payload              | `buildPayload(storeId, marketplaceId, dates)` |
-| `extractMetricData()` | Parse API response             | `extractMetricData(response)`                 |
-| `mergeSparklines()`   | Merge sparklines (multi-store) | `mergeSparklines(arrays)`                     |
-| `aggregateMetrics()`  | Aggregate multi-store data     | `aggregateMetrics(results)`                   |
+| Function                     | Purpose                        | Usage                                         |
+| ---------------------------- | ------------------------------ | --------------------------------------------- |
+| `getTargetStores()`          | Filter stores (single/all)     | `getTargetStores(store, stores)`              |
+| `formatDateRange()`          | Format date untuk API          | `formatDateRange(dateRange)`                  |
+| `buildPayload()`             | Build API payload              | `buildPayload(storeId, marketplaceId, dates)` |
+| `extractMetricData()`        | Parse API response             | `extractMetricData(response)`                 |
+| `mergeSparklines()`          | Merge sparklines (multi-store) | `mergeSparklines(arrays)`                     |
+| `aggregateOverviewMetrics()` | Aggregate multi-store data     | `aggregateOverviewMetrics(results)`           |
 
 **File: `utils/formatters.ts`**
 
@@ -185,7 +185,7 @@ const DashboardOverview = () => {
 | ----------------------- | ------------------------------ | ---------------- | -------------- |
 | **Overview (Tinjauan)** | ✅ Consolidated Hook           | ✅ Complete      | -340 baris     |
 | **Ads (Iklan)**         | ✅ Split Strategy (Data + Top) | ✅ Complete      | -300 baris     |
-| **Chat**                | ⏳ To create                   | ⏳ Pending       | ~300 baris     |
+| **Chat**                | ✅ Consolidated Hook           | ✅ Complete      | -200 baris     |
 | **Orders**              | ⏳ To create                   | ⏳ Pending       | ~200 baris     |
 | **Products**            | ⏳ To create                   | ⏳ Pending       | ~150 baris     |
 
@@ -667,11 +667,21 @@ Saat filter "Semua Toko" dipilih:
 const results = await Promise.all(
   stores.map((store) => api.analytics.getOverview(store.id, dateRange))
 );
-const aggregated = aggregateData(results);
+const aggregated = aggregateData(results); // Helper: utils/dashboardHelpers.ts
 
 // ❌ SALAH
 api.analytics.getOverview("", dateRange); // Backend akan error
 ```
+
+### Self-Healing Aggregation Strategy 🛡️
+
+Untuk menangani inkonsistensi data backend (misal: header total 0 tapi grafik ada isi), Frontend menggunakan strategi **"Trust the Sparkline"**:
+
+1. **Total Metrics** dihitung ulang dengan menjumlahkan data dari `sparkline`.
+2. **Derived Metrics** (ROAS, CR) dihitung ulang dari total metrics yang sudah dibenarkan.
+3. **Date Parsing** bersifat polyglot (mendukung `tanggal` maupun `date` key) untuk menangani respon dari berbagai marketplace.
+
+Lihat: `src/utils/dashboardHelpers.ts` (`aggregateOverviewMetrics`, `aggregateChatMetrics`, `aggregateAdsMetrics`).
 
 ---
 

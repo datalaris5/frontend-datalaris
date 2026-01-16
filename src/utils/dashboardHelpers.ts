@@ -137,23 +137,27 @@ export function mergeSparklines(
 
   if (flat.length === 0) return [];
 
-  // Group by tanggal
-  const grouped = groupBy(flat, "tanggal");
+  // Group by tanggal (support date/tanggal keys)
+  const grouped = groupBy(flat, (item: any) => item.tanggal || item.date);
 
   // Sum/Avg totals untuk setiap tanggal & Sort by date
   return Object.entries(grouped)
-    .map(([tanggal, items]) => {
+    .map(([dateKey, items]) => {
+      // Filter out undefined/null keys
+      if (!dateKey || dateKey === "undefined") return null;
+
       const sum = sumBy(items, (item) => Number(item.total || 0));
       const value = type === "average" ? sum / items.length : sum;
 
       return {
-        tanggal,
+        tanggal: dateKey, // Normalized to 'tanggal'
         total: value,
       };
     })
+    .filter((item) => item !== null) // Remove failed groups
     .sort(
-      (a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime()
-    );
+      (a, b) => new Date(a!.tanggal).getTime() - new Date(b!.tanggal).getTime()
+    ) as SparklineItem[];
 }
 
 /**
@@ -163,7 +167,14 @@ export function mergeSparklines(
  * @param results - Array of store metric results
  * @returns Aggregated metrics
  */
-export function aggregateMetrics(results: any[]) {
+/**
+ * Aggregate metrics dari multiple stores
+ * Updated: Computes totals from sparklines for robustness (like aggregateChatMetrics)
+ *
+ * @param results - Array of store metric results
+ * @returns Aggregated metrics
+ */
+export function aggregateOverviewMetrics(results: any[]) {
   if (results.length === 0) {
     return {
       sales: { current: 0, previous: 0, percent: 0, sparkline: [] },
@@ -174,28 +185,27 @@ export function aggregateMetrics(results: any[]) {
     };
   }
 
-  // Aggregate current values
+  // Helper to process metric with sparkline sum
+  const processMetric = (metricKey: string) => {
+    const rawSparklines = results.map((r) => r[metricKey]?.sparkline || []);
+
+    const sparklines = mergeSparklines(rawSparklines);
+    // Sum from sparklines for safety
+    const current = sumBy(sparklines, "total");
+    const previous = sumBy(results, `${metricKey}.previous`);
+
+    return {
+      current,
+      previous,
+      percent: 0,
+      sparkline: sparklines,
+    };
+  };
+
   const aggregated = {
-    sales: {
-      current: sumBy(results, "sales.current"),
-      previous: sumBy(results, "sales.previous"),
-      percent: 0, // Multi-store tidak ada percent comparison
-      sparkline: mergeSparklines(results.map((r) => r.sales?.sparkline || [])),
-    },
-    orders: {
-      current: sumBy(results, "orders.current"),
-      previous: sumBy(results, "orders.previous"),
-      percent: 0, // Multi-store tidak ada percent comparison
-      sparkline: mergeSparklines(results.map((r) => r.orders?.sparkline || [])),
-    },
-    visitors: {
-      current: sumBy(results, "visitors.current"),
-      previous: sumBy(results, "visitors.previous"),
-      percent: 0, // Multi-store tidak ada percent comparison
-      sparkline: mergeSparklines(
-        results.map((r) => r.visitors?.sparkline || [])
-      ),
-    },
+    sales: processMetric("sales"),
+    orders: processMetric("orders"),
+    visitors: processMetric("visitors"),
   };
 
   // Calculate derived metrics
@@ -208,12 +218,14 @@ export function aggregateMetrics(results: any[]) {
   const prevSales = aggregated.sales.previous;
   const prevVisitors = aggregated.visitors.previous;
 
+  // For CR and BS, we aggregate sparklines using Average or Re-derive?
+  // Use mergeSparklines 'average' for trend visualization
   return {
     ...aggregated,
     cr: {
       current: totalVisitors > 0 ? (totalOrders / totalVisitors) * 100 : 0,
       previous: prevVisitors > 0 ? (prevOrders / prevVisitors) * 100 : 0,
-      percent: 0, // Multi-store tidak ada percent comparison
+      percent: 0,
       sparkline: mergeSparklines(
         results.map((r) => r.cr?.sparkline || []),
         "average"
@@ -222,11 +234,134 @@ export function aggregateMetrics(results: any[]) {
     bs: {
       current: totalOrders > 0 ? totalSales / totalOrders : 0,
       previous: prevOrders > 0 ? prevSales / prevOrders : 0,
-      percent: 0, // Multi-store tidak ada percent comparison
+      percent: 0,
       sparkline: mergeSparklines(
         results.map((r) => r.bs?.sparkline || []),
         "average"
       ),
     },
   };
+}
+
+/**
+ * Aggregate Chat Metrics from multiple stores
+ */
+/**
+ * Aggregate Chat Metrics from multiple stores
+ */
+export function aggregateChatMetrics(results: any[]) {
+  if (results.length === 0) {
+    return {
+      total: { total: 0, sparkline: [] },
+      replied: { total: 0, sparkline: [] },
+      percent: { total: 0, sparkline: [] },
+      buyers: { total: 0, sparkline: [] },
+      sales: { total: 0, sparkline: [] },
+      cr: { total: 0, sparkline: [] },
+    };
+  }
+
+  // Helper to merge and sum from sparklines (More Robust than API total)
+  const processMetric = (
+    metricKey: string,
+    type: "sum" | "average" = "sum"
+  ) => {
+    const sparklines = mergeSparklines(
+      results.map((r) => r[metricKey]?.sparkline || []),
+      type
+    );
+
+    // Calculate total from sparklines instead of trusting API "total" field
+    // This fixes the issue where API returns 0 total but data exists in sparkline
+    let total = 0;
+    if (type === "sum") {
+      total = sumBy(sparklines, "total");
+    } else {
+      // For average, we'll recalculate later or use avg of sparklines
+      total =
+        sparklines.length > 0
+          ? sumBy(sparklines, "total") / sparklines.length
+          : 0;
+    }
+
+    return { total, sparkline: sparklines };
+  };
+
+  const aggregated = {
+    total: processMetric("total"),
+    replied: processMetric("replied"),
+    buyers: processMetric("buyers"),
+    sales: processMetric("sales"),
+    percent: processMetric("percent", "average"),
+    cr: processMetric("cr", "average"),
+  };
+
+  // Recalculate Derived Metrics (Percent & CR) from Aggregated Totals
+  // This ensures 100% accuracy: (Sum Replied / Sum Total) * 100
+  const sumTotal = aggregated.total.total;
+  const sumReplied = aggregated.replied.total;
+  const sumBuyers = aggregated.buyers.total;
+
+  const avgPercent = sumTotal > 0 ? (sumReplied / sumTotal) * 100 : 0;
+  const avgCr = sumTotal > 0 ? (sumBuyers / sumTotal) * 100 : 0;
+
+  return {
+    ...aggregated,
+    percent: {
+      ...aggregated.percent,
+      total: avgPercent,
+    },
+    cr: {
+      ...aggregated.cr,
+      total: avgCr,
+    },
+  };
+}
+
+/**
+ * Aggregate Ads Metrics from multiple stores
+ */
+export function aggregateAdsMetrics(results: any[]) {
+  if (results.length === 0) {
+    return {
+      sales: { total: 0, sparkline: [] },
+      cost: { total: 0, sparkline: [] },
+      roas: { total: 0, sparkline: [] },
+      impressions: { total: 0, sparkline: [] },
+      ctr: { total: 0, sparkline: [] },
+      cr: { total: 0, sparkline: [] },
+    };
+  }
+
+  // Helper with robust sum from sparklines
+  const processMetric = (
+    metricKey: string,
+    type: "sum" | "average" = "sum"
+  ) => {
+    const sparklines = mergeSparklines(
+      results.map((r) => r[metricKey]?.sparkline || []),
+      type
+    );
+    let total = 0;
+    if (type === "sum") {
+      total = sumBy(sparklines, "total");
+    } else {
+      total =
+        sparklines.length > 0
+          ? sumBy(sparklines, "total") / sparklines.length
+          : 0;
+    }
+    return { total, sparkline: sparklines };
+  };
+
+  const aggregated = {
+    sales: processMetric("sales"),
+    cost: processMetric("cost"),
+    impressions: processMetric("impressions"),
+    roas: processMetric("roas", "average"),
+    ctr: processMetric("ctr", "average"),
+    cr: processMetric("cr", "average"),
+  };
+
+  return aggregated;
 }
