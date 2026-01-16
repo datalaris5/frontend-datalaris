@@ -7,6 +7,7 @@ import {
   getTargetStores,
   buildPayload,
   mergeSparklines,
+  aggregateAdsMetrics,
 } from "@/utils/dashboardHelpers";
 import {
   TrendingUp,
@@ -189,9 +190,28 @@ export const useAdsData = () => {
 
       // 2. Fetch All Stores
       const results = await Promise.all(
-        targetStores.map((s) =>
-          fetchStoreAdsMetrics(s.id!, s.marketplace_id || 1, dates)
-        )
+        targetStores.map(async (s) => {
+          try {
+            return await fetchStoreAdsMetrics(
+              s.id!,
+              s.marketplace_id || 1,
+              dates
+            );
+          } catch (error) {
+            console.warn(
+              `Failed to fetch ads metrics for store ${s.id}:`,
+              error
+            );
+            return {
+              sales: { total: 0, sparkline: [] },
+              cost: { total: 0, sparkline: [] },
+              roas: { total: 0, sparkline: [] },
+              impressions: { total: 0, sparkline: [] },
+              ctr: { total: 0, sparkline: [] },
+              cr: { total: 0, sparkline: [] },
+            };
+          }
+        })
       );
 
       // 3. Aggregate Data (Sum/Avg)
@@ -205,63 +225,45 @@ export const useAdsData = () => {
 
       const aggregatedData: AdsChartData = {
         sales: mergeSparklines(salesSparklines),
-        cost: mergeSparklines(costSparklines),
-        roas: mergeSparklines(roasSparklines, "average"),
-        impressions: mergeSparklines(impSparklines),
-        ctr: mergeSparklines(ctrSparklines, "average"),
-        cr: mergeSparklines(crSparklines, "average"),
-      };
+      // Use standard helper for robust calculation (Total = Sum of Sparklines)
+      const aggregatedData = aggregateAdsMetrics(results);
 
-      // Calculate Totals
-      const totals = {
-        sales: results.reduce((acc, curr) => acc + Number(curr.sales.total), 0),
-        cost: results.reduce((acc, curr) => acc + Number(curr.cost.total), 0),
-        impressions: results.reduce(
-          (acc, curr) => acc + Number(curr.impressions.total),
-          0
-        ),
-        // Weighted Averages/Direct Avg for rates (Simplified for now)
-        // Ideally should be recalculated from totals but following API "total" property pattern
-        roas:
-          results.length > 0
-            ? results.reduce((acc, curr) => acc + Number(curr.roas.total), 0) /
-              results.length
-            : 0,
-        ctr:
-          results.length > 0
-            ? results.reduce((acc, curr) => acc + Number(curr.ctr.total), 0) /
-              results.length
-            : 0,
-        cr:
-          results.length > 0
-            ? results.reduce((acc, curr) => acc + Number(curr.cr.total), 0) /
-              results.length
-            : 0,
-      };
-
-      // 4. Transform to DashboardMetrics
+      // 4. Update Metrics Config
       const metrics = [...initialMetricsConfig];
-      const mapToMetric = (idx: number, val: number, sl: TimeDataPoint[]) => {
+
+      const mapToMetric = (
+        idx: number,
+        val: number,
+        sl: any[]
+      ) => {
         if (metrics[idx]) {
           metrics[idx] = {
             ...metrics[idx],
             value: val,
-            data: sl.map((d) => Number(d.total)),
+            data: sl.map((d: any) => Number(d.total)),
           };
         }
       };
 
-      mapToMetric(0, totals.sales, aggregatedData.sales);
-      mapToMetric(1, totals.cost, aggregatedData.cost);
-      mapToMetric(2, totals.roas, aggregatedData.roas);
-      // Skip AOV (idx 3)
-      mapToMetric(4, totals.impressions, aggregatedData.impressions);
-      mapToMetric(5, totals.ctr, aggregatedData.ctr);
-      mapToMetric(6, totals.cr, aggregatedData.cr);
+      mapToMetric(0, aggregatedData.sales.total, aggregatedData.sales.sparkline); // GMV
+      mapToMetric(1, aggregatedData.cost.total, aggregatedData.cost.sparkline); // Biaya
+      mapToMetric(2, aggregatedData.roas.total, aggregatedData.roas.sparkline); // ROAS
+      // Note: AOV Iklan (idx 3) is a dummy metric and not directly mapped from aggregated data
+      mapToMetric(4, aggregatedData.impressions.total, aggregatedData.impressions.sparkline); // Dilihat
+      mapToMetric(5, aggregatedData.ctr.total, aggregatedData.ctr.sparkline); // Persentase Klik (CTR)
+      mapToMetric(6, aggregatedData.cr.total, aggregatedData.cr.sparkline); // Konversi (CR)
+      // Note: CPA (idx 7) is a dummy metric and not directly mapped from aggregated data
 
       return {
         metrics,
-        chartData: aggregatedData,
+        chartData: {
+          sales: aggregatedData.sales.sparkline,
+          cost: aggregatedData.cost.sparkline,
+          roas: aggregatedData.roas.sparkline,
+          impressions: aggregatedData.impressions.sparkline,
+          ctr: aggregatedData.ctr.sparkline,
+          cr: aggregatedData.cr.sparkline,
+        },
       };
     },
     enabled:

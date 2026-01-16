@@ -14,7 +14,7 @@
  * - Waktu Respon (Bar Chart dengan KPI line)
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   AreaChart,
   Area,
@@ -25,31 +25,45 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
-  Line,
-  Cell,
-  ReferenceLine,
 } from "recharts";
-import {
-  MessageSquare,
-  CheckCircle2,
-  Percent,
-  Clock,
-  ShoppingCart,
-  Users,
-  UserCheck,
-  Upload,
-  LucideIcon,
-} from "lucide-react";
+import { Upload, BarChart3, Clock, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useFilter } from "@/context/FilterContext";
-import { api } from "@/services/api";
 import FeatureNotReady from "@/components/common/FeatureNotReady";
-import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import CountUp from "react-countup";
-import MetricCard from "@/components/dashboard/MetricCard";
-import { MetricColor } from "@/types/dashboard.types";
+import { useChatData } from "@/hooks/useChatData";
+import DateRangePicker from "@/components/common/DateRangePicker";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  staggerContainerVariants,
+  fadeInUpVariants,
+  chartContentVariants,
+} from "@/config/animationConfig";
+import {
+  MetricCard,
+  MetricCardSkeleton,
+  InsightBanner,
+  ChartEmptyState,
+  ChartSkeleton,
+  MetricSelector,
+} from "@/components/dashboard";
+import TabToggle from "@/components/ui/TabToggle";
+import {
+  aggregateData,
+  getAvailableGranularities,
+  TimeGranularity,
+  granularityLabels,
+} from "@/utils/timeAggregation";
+import { useFilter } from "@/context/FilterContext";
+import {
+  chartContent,
+  chartHeaderIcons,
+  chartTypography,
+  chartColors,
+  chartGradients,
+  chartUI,
+  chartAnimation,
+  areaStyles,
+} from "@/config/chartTheme";
 
 // Tipe untuk tooltip props dari Recharts
 interface TooltipPayload {
@@ -78,26 +92,35 @@ const CustomVolumeTooltip: React.FC<CustomVolumeTooltipProps> = ({
     const missedPercent = incoming > 0 ? (missed / incoming) * 100 : 0;
 
     return (
-      <div className="glass-card-strong p-3 rounded-xl border border-white/20 shadow-xl backdrop-blur-md">
-        <p className="text-xs font-bold text-muted-foreground mb-2">{label}</p>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-4 text-xs font-medium">
-            <span className="text-blue-500 flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500" /> Masuk
+      <div className="glass-tooltip p-3 min-w-[150px]">
+        <div className="mb-2 pb-2 border-b border-border/50">
+          <p className="text-xs font-bold text-foreground">{label}</p>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Masuk
             </span>
-            <span className="text-foreground">{incoming}</span>
+            <span className="text-sm font-bold text-foreground tabular-nums">
+              {incoming}
+            </span>
           </div>
-          <div className="flex items-center justify-between gap-4 text-xs font-medium">
-            <span className="text-emerald-500 flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" /> Dibalas
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
+              Dibalas
             </span>
-            <span className="text-foreground">{replied}</span>
+            <span className="text-sm font-bold text-foreground tabular-nums">
+              {replied}
+            </span>
           </div>
           {missed > 0 && (
-            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between gap-4 text-xs font-bold text-rose-500">
-              <span className="flex items-center gap-1">⚠️ Tak Dibalas</span>
-              <span className="bg-rose-500/10 px-1.5 py-0.5 rounded text-rose-600 dark:text-rose-400">
-                {missed} ({missedPercent.toFixed(0)}%)
+            <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-4">
+              <span className="text-xs font-medium text-rose-500 flex items-center gap-1">
+                ⚠️ Tak Dibalas
+              </span>
+              <span className="badge-growth badge-growth-negative ml-0 scale-90 origin-right">
+                {missed} ({missedPercent.toFixed(1)}%)
               </span>
             </div>
           )}
@@ -108,290 +131,152 @@ const CustomVolumeTooltip: React.FC<CustomVolumeTooltipProps> = ({
   return null;
 };
 
-// Tipe untuk chart data
-interface VolumeChartData {
-  date: string;
-  incoming: number;
-  replied: number;
-}
-
-interface ResponseTimeData {
-  date: string;
-  time: number;
-}
-
-// Tipe untuk metric
-interface ChatMetric {
-  title: string;
-  value: number;
-  format: "number" | "percent" | "currency";
-  suffix?: string;
-  trend: string;
-  trendUp: boolean;
-  data: number[];
-  icon: LucideIcon;
-  color: MetricColor;
-  highlight?: boolean;
-  isDummy: boolean;
-}
-
 const DashboardChat: React.FC = () => {
-  const { store, stores, dateRange } = useFilter();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [kpiTarget, setKpiTarget] = useState(10); // Default KPI 10 menit
+  const { dateRange } = useFilter(); // Get Global Date Range
+  const [selectedIndicator, setSelectedIndicator] = useState("volume");
+  const [selectedGranularity, setSelectedGranularity] =
+    useState<TimeGranularity>("daily");
 
-  // Chart Data State
-  const [volumeChartData, setVolumeChartData] = useState<VolumeChartData[]>([]);
-  const [responseTimeData, setResponseTimeData] = useState<ResponseTimeData[]>(
-    []
-  );
-
-  // Metrics State
-  const [metrics, setMetrics] = useState<ChatMetric[]>([
-    {
-      title: "Jumlah Chat",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: MessageSquare,
-      color: "blue",
-      highlight: true,
-      isDummy: false,
+  // Chart Configuration Map
+  const chartConfig: Record<string, { subtitle: string }> = {
+    volume: {
+      subtitle: "Tren jumlah chat masuk",
     },
-    {
-      title: "Chat Dibalas",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: CheckCircle2,
-      color: "emerald",
-      isDummy: false,
+    responseTime: {
+      subtitle: "Rata-rata waktu respon harian",
     },
-    {
-      title: "Persentase Dibalas",
-      value: 0,
-      format: "percent",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Percent,
-      color: "purple",
-      isDummy: false,
+    sales: {
+      subtitle: "Tren nominal penjualan dari chat",
     },
-    {
-      title: "Rata - Rata Waktu Respon",
-      value: 0,
-      format: "number",
-      suffix: "m",
-      trend: "0%",
-      trendUp: false,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Clock,
-      color: "orange",
-      isDummy: true,
+    buyers: {
+      subtitle: "Tren jumlah pembeli unik",
     },
-    {
-      title: "Conversion Rate",
-      value: 0,
-      format: "percent",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: ShoppingCart,
-      color: "cyan",
-      isDummy: false,
+    percent: {
+      subtitle: "Tren performa balasan chat (%)",
     },
-    {
-      title: "Estimasi Penjualan",
-      value: 0,
-      format: "currency",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: Users,
-      color: "green",
-      isDummy: false,
+    cr: {
+      subtitle: "Tren tingkat konversi chat ke penjualan",
     },
-    {
-      title: "Total Pembeli",
-      value: 0,
-      format: "number",
-      trend: "0%",
-      trendUp: true,
-      data: [0, 0, 0, 0, 0, 0, 0],
-      icon: UserCheck,
-      color: "pink",
-      isDummy: false,
-    },
-  ]);
-
-  // Helper: merge sparklines untuk multi-store
-  const mergeSparklines = (
-    base: Array<{ total: number }>,
-    incoming: Array<{ total: number }>
-  ): Array<{ total: number }> => {
-    if (!incoming || incoming.length === 0) return base;
-    if (!base || base.length === 0) return incoming.map((i) => ({ ...i }));
-    return base.map((b, i) => {
-      const inc = incoming[i] || { total: 0 };
-      return { ...b, total: Number(b.total) + Number(inc.total) };
-    });
   };
 
-  useEffect(() => {
-    // Generate dummy data untuk response time
-    const generateDummyResponseTime = (): ResponseTimeData[] => {
-      return Array.from({ length: 7 }, (_, i) => ({
-        date: `Hari ${i + 1}`,
-        time: Math.floor(Math.random() * 15) + 2,
-      }));
-    };
-    setResponseTimeData(generateDummyResponseTime());
+  const currentChartConfig =
+    chartConfig[selectedIndicator] || chartConfig.volume;
 
-    // Fetch real chat data
-    const loadData = async (): Promise<void> => {
-      setLoading(true);
-      try {
-        // Determine target stores
-        interface StoreItem {
-          id?: string | number;
-        }
-        let targetStores: StoreItem[] = [];
-        if (store === "all") {
-          targetStores = stores.filter((s: StoreItem) => s && s.id);
-        } else {
-          targetStores = [{ id: store }];
-        }
+  // Use Custom Hook (Centralized logic)
+  const {
+    metrics,
+    rawTrendData,
+    rawResponseTimeData,
+    responseTimeData,
+    loading,
+  } = useChatData();
 
-        if (targetStores.length === 0) {
-          setLoading(false);
-          return;
-        }
+  // 1. Determine Available Granularities
+  const availableGranularities = React.useMemo(() => {
+    if (!dateRange?.startDate || !dateRange?.endDate)
+      return ["daily"] as TimeGranularity[];
+    return getAvailableGranularities(dateRange.startDate, dateRange.endDate);
+  }, [dateRange]);
 
-        const fromDate = dateRange?.startDate
-          ? format(dateRange.startDate, "yyyy-MM-dd")
-          : "";
-        const toDate = dateRange?.endDate
-          ? format(dateRange.endDate, "yyyy-MM-dd")
-          : "";
-
-        // Fetch for each store
-        const fetchStoreData = async (storeId: string | number) => {
-          const params = {
-            date_from: fromDate,
-            date_to: toDate,
-            store_id: storeId,
-          };
-          const [totalRes, repliedRes, percentRes, buyersRes, salesRes, crRes] =
-            await Promise.all([
-              api.chat.jumlahChat(params),
-              api.chat.chatDibalas(params),
-              api.chat.persentaseChat(params),
-              api.chat.totalPembeli(params),
-              api.chat.penjualan(params),
-              api.chat.conversionRate(params),
-            ]);
-          return {
-            total: totalRes.data?.data || {},
-            replied: repliedRes.data?.data || {},
-            percent: percentRes.data?.data || {},
-            buyers: buyersRes.data?.data || {},
-            sales: salesRes.data?.data || {},
-            cr: crRes.data?.data || {},
-          };
-        };
-
-        const results = await Promise.all(
-          targetStores.map((s) => fetchStoreData(s.id!))
-        );
-
-        // Aggregate results
-        let sumTotalChat = 0,
-          sumRepliedChat = 0,
-          sumSales = 0,
-          sumBuyers = 0;
-        let totalSparkline: Array<{ total: number; tanggal?: string }> = [];
-        let repliedSparkline: Array<{ total: number }> = [];
-
-        results.forEach((res, index) => {
-          sumTotalChat += Number(res.total.total || 0);
-          sumRepliedChat += Number(res.replied.total || 0);
-          sumSales += Number(res.sales.total || 0);
-          sumBuyers += Number(res.buyers.total || 0);
-
-          if (index === 0) {
-            totalSparkline = res.total.sparkline || [];
-            repliedSparkline = res.replied.sparkline || [];
-          } else {
-            totalSparkline = mergeSparklines(
-              totalSparkline,
-              res.total.sparkline || []
-            );
-            repliedSparkline = mergeSparklines(
-              repliedSparkline,
-              res.replied.sparkline || []
-            );
-          }
-        });
-
-        // Recalculate derived metrics
-        const percentDibalas =
-          sumTotalChat > 0 ? (sumRepliedChat / sumTotalChat) * 100 : 0;
-        const crValue = sumTotalChat > 0 ? (sumBuyers / sumTotalChat) * 100 : 0;
-
-        // Update metrics
-        setMetrics((prev) => {
-          const newMetrics = [...prev];
-          newMetrics[0] = {
-            ...newMetrics[0],
-            value: sumTotalChat,
-            data: totalSparkline.map((d) => Number(d.total)),
-          };
-          newMetrics[1] = {
-            ...newMetrics[1],
-            value: sumRepliedChat,
-            data: repliedSparkline.map((d) => Number(d.total)),
-          };
-          newMetrics[2] = { ...newMetrics[2], value: percentDibalas };
-          newMetrics[4] = { ...newMetrics[4], value: crValue };
-          newMetrics[5] = { ...newMetrics[5], value: sumSales };
-          newMetrics[6] = { ...newMetrics[6], value: sumBuyers };
-          return newMetrics;
-        });
-
-        // Set chart data
-        if (totalSparkline.length > 0) {
-          const chartData = totalSparkline.map((val, idx) => ({
-            date: val.tanggal
-              ? format(new Date(val.tanggal), "dd MMM")
-              : `Hari ${idx + 1}`,
-            incoming: Number(val.total),
-            replied: Number(repliedSparkline[idx]?.total || 0),
-          }));
-          setVolumeChartData(chartData);
-        } else {
-          setVolumeChartData([]);
-        }
-      } catch (error) {
-        console.error("Chat Data Error:", error);
-        setVolumeChartData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (dateRange?.startDate) {
-      loadData();
+  // 2. Reset Granularity if not available
+  React.useEffect(() => {
+    if (!availableGranularities.includes(selectedGranularity)) {
+      setSelectedGranularity(availableGranularities[0]);
     }
-  }, [store, stores, dateRange]);
+  }, [availableGranularities, selectedGranularity]);
+
+  // 3. Aggregate Data Dynamically
+  const aggregatedTrendData = React.useMemo(() => {
+    if (!rawTrendData.length || !dateRange?.startDate || !dateRange?.endDate)
+      return [];
+
+    // Case 1: Volume (Single Series: Incoming Only)
+    if (selectedIndicator === "volume") {
+      const source = rawTrendData.map((d) => ({
+        tanggal: d.date,
+        total: d.incoming,
+      }));
+      const aggregated = aggregateData(
+        source,
+        selectedGranularity,
+        dateRange.startDate,
+        dateRange.endDate,
+        "sum"
+      );
+      return aggregated.map((d) => ({
+        date: d.key,
+        value: d.value,
+      }));
+    }
+
+    // Case 2: Response Time (Handled separately via API but aggregated in Frontend for granularity)
+    if (selectedIndicator === "responseTime") {
+      if (!rawResponseTimeData.length) return [];
+      const source = rawResponseTimeData.map((d) => ({
+        tanggal: d.date,
+        total: d.time,
+      }));
+      const aggregated = aggregateData(
+        source,
+        selectedGranularity,
+        dateRange.startDate,
+        dateRange.endDate,
+        "average"
+      );
+      return aggregated.map((d) => ({
+        date: d.key,
+        value: Number(d.value.toFixed(1)), // Keep 1 decimal for minutes
+      }));
+    }
+
+    // Case 3: Other Metrics (Single Series)
+    const metricKeyMap: Record<string, keyof (typeof rawTrendData)[0]> = {
+      sales: "sales",
+      buyers: "buyers",
+      percent: "percent",
+      cr: "cr",
+    };
+    const key = metricKeyMap[selectedIndicator];
+    if (!key) return [];
+
+    const source = rawTrendData.map((d) => ({
+      tanggal: d.date,
+      total: Number(d[key]),
+    }));
+
+    const aggregationType =
+      selectedIndicator === "percent" || selectedIndicator === "cr"
+        ? "average"
+        : "sum";
+
+    const aggregated = aggregateData(
+      source,
+      selectedGranularity,
+      dateRange.startDate,
+      dateRange.endDate,
+      aggregationType
+    );
+
+    return aggregated.map((d) => ({
+      date: d.key,
+      value: d.value,
+    }));
+  }, [
+    rawTrendData,
+    rawResponseTimeData,
+    selectedIndicator,
+    selectedGranularity,
+    dateRange,
+  ]);
 
   return (
-    <div className="flex flex-col h-full gap-4 overflow-hidden animate-fade-in pb-4">
+    <motion.div
+      className="flex flex-col h-full gap-4 overflow-hidden pb-4"
+      variants={staggerContainerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
       <div className="flex items-center justify-between flex-none pt-1">
         <div>
@@ -403,6 +288,11 @@ const DashboardChat: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Filter Tanggal */}
+          <DateRangePicker
+            minDate={new Date(2024, 0, 1)}
+            maxDate={new Date()}
+          />
           <button
             onClick={() => navigate("/upload")}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 mr-2"
@@ -413,207 +303,354 @@ const DashboardChat: React.FC = () => {
         </div>
       </div>
 
+      {/* Insight Banner */}
+      <motion.div variants={fadeInUpVariants}>
+        <InsightBanner metrics={metrics} loading={loading} />
+      </motion.div>
+
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 flex-none">
-        {metrics.map((metric, index) => (
-          <MetricCard key={index} metric={metric} />
-        ))}
-      </div>
+      <motion.div
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 flex-none"
+        variants={fadeInUpVariants}
+      >
+        {loading
+          ? Array.from({ length: metrics.length }).map((_, i) => (
+              <MetricCardSkeleton key={i} highlight={i === 0} />
+            ))
+          : metrics.map((metric, index) => (
+              <MetricCard key={index} metric={metric} staggerIndex={index} />
+            ))}
+      </motion.div>
 
       {/* Charts Area */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <motion.div
+        className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4"
+        variants={staggerContainerVariants}
+      >
         {/* Volume Chart */}
-        <div className="col-span-2 min-h-0">
-          <FeatureNotReady
-            blur={volumeChartData.length === 0}
-            overlay={volumeChartData.length === 0}
-            message="Segera Hadir"
-          >
-            <Card className="glass-card-strong rounded-2xl h-full flex flex-col">
+        <motion.div className="col-span-2 min-h-0" variants={fadeInUpVariants}>
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
+            <Card className="glass-card rounded-2xl h-full flex flex-col">
               <CardHeader className="py-4 px-6 flex-none border-b border-white/10">
-                <CardTitle className="text-lg font-bold">
-                  Tren Jumlah Chat
-                </CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div>
+                      <CardTitle
+                        className={`${chartTypography.titleLarge} flex items-center gap-2`}
+                      >
+                        <TrendingUp className={chartHeaderIcons.large} />
+                        {chartContent.tren.title}
+                      </CardTitle>
+                      <p className={`${chartTypography.subtitle} mt-1`}>
+                        {currentChartConfig.subtitle}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <MetricSelector
+                      value={selectedIndicator}
+                      onValueChange={(val) => setSelectedIndicator(val)}
+                      options={[
+                        { value: "volume", label: "Jumlah Chat" },
+                        { value: "sales", label: "Estimasi Penjualan" },
+                        { value: "buyers", label: "Total Pembeli" },
+                        { value: "percent", label: "Persentase Dibalas" },
+                        { value: "cr", label: "Conversion Rate" },
+                        { value: "responseTime", label: "Waktu Respon" },
+                      ]}
+                    />
+                    <TabToggle
+                      items={availableGranularities.map((g) => ({
+                        value: g,
+                        label: granularityLabels[g],
+                      }))}
+                      activeValue={selectedGranularity}
+                      onChange={(val) => setSelectedGranularity(val as any)}
+                      size="sm"
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={volumeChartData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorIncoming"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
+                <AnimatePresence mode="wait">
+                  {selectedIndicator === "responseTime" ? (
+                    // RESPONSE TIME CHART (Aggregated)
+                    aggregatedTrendData.length === 0 ? (
+                      <motion.div
+                        key="empty-response"
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full"
                       >
-                        <stop
-                          offset="5%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.3}
+                        <ChartEmptyState
+                          icon={Clock}
+                          title="Data Waktu Respon Kosong"
+                          message="Upload data untuk melihat waktu respon."
                         />
-                        <stop
-                          offset="95%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                      <linearGradient
-                        id="colorReplied"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key={`response-chart-${selectedGranularity}`}
+                        variants={chartContentVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="h-full"
                       >
-                        <stop
-                          offset="5%"
-                          stopColor="#10b981"
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#10b981"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      content={<CustomVolumeTooltip />}
-                      cursor={{
-                        stroke: "hsl(var(--muted-foreground))",
-                        strokeWidth: 1,
-                        strokeDasharray: "4 4",
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="incoming"
-                      name="Chat Masuk"
-                      stroke="#3b82f6"
-                      fillOpacity={1}
-                      fill="url(#colorIncoming)"
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="replied"
-                      name="Dibalas"
-                      stroke="#10b981"
-                      fillOpacity={1}
-                      fill="url(#colorReplied)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={aggregatedTrendData}
+                            margin={{
+                              top: 10,
+                              right: 10,
+                              left: -20,
+                              bottom: 0,
+                            }}
+                          >
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                              opacity={0.1}
+                            />
+                            <XAxis
+                              dataKey="date"
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 10 }}
+                              dy={10}
+                            />
+                            <YAxis
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 10 }}
+                            />
+                            <Tooltip
+                              cursor={{ fill: "transparent" }}
+                              formatter={(value) => [
+                                `${value} Menit`,
+                                "Waktu Respon",
+                              ]}
+                            />
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                              {aggregatedTrendData.map((entry, index) => {
+                                let color = "#10b981";
+                                if (entry.value > kpiTarget) color = "#ef4444";
+                                else if (entry.value > kpiTarget / 2)
+                                  color = "#f97316";
+                                return (
+                                  <Cell key={`cell-${index}`} fill={color} />
+                                );
+                              })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </motion.div>
+                    )
+                  ) : aggregatedTrendData.length === 0 ? (
+                    // EMPTY STATE (Generic)
+                    <motion.div
+                      key="empty-trend"
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
+                    >
+                      <ChartEmptyState
+                        icon={BarChart3}
+                        title="Data Tren Belum Tersedia"
+                        message="Upload data chat untuk melihat grafik tren."
+                      />
+                    </motion.div>
+                  ) : (
+                    // GENERIC TREND CHART (Single Area)
+                    <motion.div
+                      key={`trend-chart-${selectedIndicator}-${selectedGranularity}`}
+                      variants={chartContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="h-full"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={aggregatedTrendData}
+                          margin={{
+                            top: 10,
+                            right: 10,
+                            left: -20,
+                            bottom: 0,
+                          }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id={chartGradients.primary.id}
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset={chartGradients.primary.start.offset}
+                                stopColor={chartGradients.primary.start.color}
+                                stopOpacity={
+                                  chartGradients.primary.start.opacity
+                                }
+                              />
+                              <stop
+                                offset={chartGradients.primary.end.offset}
+                                stopColor={chartGradients.primary.end.color}
+                                stopOpacity={chartGradients.primary.end.opacity}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray={
+                              chartUI.cartesianGrid.strokeDasharray
+                            }
+                            vertical={chartUI.cartesianGrid.vertical}
+                            opacity={chartUI.cartesianGrid.opacity}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(val) => {
+                              if (selectedIndicator === "sales") {
+                                if (val >= 1000000)
+                                  return `${(val / 1000000).toFixed(0)}jt`;
+                                return val;
+                              }
+                              return val;
+                            }}
+                          />
+                          <Tooltip
+                            formatter={(value: number) => {
+                              if (selectedIndicator === "sales") {
+                                return [
+                                  new Intl.NumberFormat("id-ID", {
+                                    style: "currency",
+                                    currency: "IDR",
+                                    minimumFractionDigits: 0,
+                                  }).format(value),
+                                  "Penjualan",
+                                ];
+                              }
+                              if (
+                                selectedIndicator === "percent" ||
+                                selectedIndicator === "cr"
+                              ) {
+                                return [`${value.toFixed(2)}%`, "Rate"];
+                              }
+                              return [value, "Total"];
+                            }}
+                            cursor={{
+                              stroke: chartUI.cursor.stroke,
+                              strokeWidth: 1,
+                              strokeDasharray: "4 4",
+                            }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            name="Total"
+                            stroke={areaStyles.primary.stroke}
+                            fill={areaStyles.primary.fill}
+                            strokeWidth={areaStyles.primary.strokeWidth}
+                            fillOpacity={1}
+                            activeDot={areaStyles.primary.activeDot}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </CardContent>
             </Card>
-          </FeatureNotReady>
-        </div>
+          )}
+        </motion.div>
 
-        {/* Response Time Chart (Dummy) */}
-        <div className="flex flex-col min-h-0">
-          <FeatureNotReady blur={true} message="Segera Hadir">
+        {/* Response Time Chart (Real Data) */}
+        <motion.div
+          className="flex flex-col min-h-0"
+          variants={fadeInUpVariants}
+        >
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
             <Card className="glass-card rounded-2xl h-full flex flex-col">
               <CardHeader className="py-4 px-6 flex-none border-b border-white/10 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-bold">
-                    Waktu Respon
+                    Waktu Respon Harian
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Target KPI:{" "}
-                    <span className="font-bold text-orange-500">
-                      {kpiTarget} Menit
-                    </span>
+                    Rata-rata waktu respon per hari
                   </p>
-                </div>
-                <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/10">
-                  <div className="text-[10px] font-bold text-muted-foreground w-6 text-center">
-                    {kpiTarget}m
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="60"
-                    step="5"
-                    value={kpiTarget}
-                    onChange={(e) => setKpiTarget(Number(e.target.value))}
-                    className="w-24 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-orange-500"
-                  />
                 </div>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 pt-4 pb-2 px-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={responseTimeData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      opacity={0.1}
-                    />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "transparent" }}
-                      formatter={(value) => [`${value} Menit`, "Waktu Respon"]}
-                    />
-                    <ReferenceLine
-                      y={kpiTarget}
-                      stroke="hsl(var(--destructive))"
-                      strokeDasharray="3 3"
-                      label={{
-                        position: "top",
-                        value: `KPI ${kpiTarget}m`,
-                        fill: "hsl(var(--destructive))",
-                        fontSize: 10,
-                      }}
-                    />
-                    <Bar dataKey="time" radius={[4, 4, 0, 0]}>
-                      {responseTimeData.map((entry, index) => {
-                        let color = "#10b981";
-                        if (entry.time > kpiTarget) color = "#ef4444";
-                        else if (entry.time > kpiTarget / 2) color = "#f97316";
-                        return <Cell key={`cell-${index}`} fill={color} />;
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                {responseTimeData.length === 0 ? (
+                  <ChartEmptyState
+                    icon={Clock}
+                    title="Data Waktu Respon Kosong"
+                    message="Upload data untuk melihat waktu respon harian."
+                  />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={responseTimeData}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        opacity={0.1}
+                      />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10 }}
+                        dy={10}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "transparent" }}
+                        formatter={(value) => [
+                          `${value} Menit`,
+                          "Waktu Respon",
+                        ]}
+                      />
+                      <Bar
+                        dataKey="time"
+                        fill={chartColors.secondary}
+                        radius={chartUI.barRadius.top}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
-          </FeatureNotReady>
-        </div>
-      </div>
-    </div>
+          )}
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
 

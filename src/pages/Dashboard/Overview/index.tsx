@@ -245,7 +245,7 @@ const DashboardOverview: React.FC = () => {
       >
         {isLoading
           ? // Skeleton loading state
-            Array.from({ length: 6 }).map((_, index) => (
+            Array.from({ length: metrics.length }).map((_, index) => (
               <MetricCardSkeleton key={index} />
             ))
           : // Actual metrics cards

@@ -24,6 +24,8 @@ import {
   startOfYear,
   subMonths,
   endOfMonth,
+  subYears,
+  endOfYear,
 } from "date-fns";
 import { api } from "@/services/api";
 import { useAuth } from "./AuthContext";
@@ -72,8 +74,12 @@ export const useFilter = (): FilterContextType => {
 };
 
 export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
-  const [platform, setPlatform] = useState("shopee"); // 'shopee', 'tiktok-tokopedia', 'all'
-  const [store, setStore] = useState("all"); // 'all' or specific store ID
+  const [platform, setPlatform] = useState(() => {
+    return localStorage.getItem("datalaris_platform_pref") || "shopee";
+  });
+  const [store, setStore] = useState(() => {
+    return localStorage.getItem("datalaris_store_pref") || "all";
+  });
   const [stores, setStores] = useState<Store[]>([]); // List of stores
   // Helper to calculate date range based on label
   const calculateDateRangeFromLabel = (label: string): DateRangeState => {
@@ -106,6 +112,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       end = endOfMonth(lastMonth);
     } else if (label === "Tahun Ini") {
       start = startOfYear(today);
+    } else if (label === "Tahun Lalu") {
+      const lastYear = subYears(today, 1);
+      start = startOfYear(lastYear);
+      end = endOfYear(lastYear);
     } else {
       // Default fallback (30 days)
       start = subDays(today, 29);
@@ -175,6 +185,16 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       localStorage.setItem("datalaris_date_pref", dateRange.label);
     }
   }, [dateRange.label]);
+
+  // Save store preference
+  useEffect(() => {
+    localStorage.setItem("datalaris_store_pref", store);
+  }, [store]);
+
+  // Save platform preference
+  useEffect(() => {
+    localStorage.setItem("datalaris_platform_pref", platform);
+  }, [platform]);
 
   const getMarketplaceName = (id: string): string => {
     const mp = marketplaces.find((m) => m.id === id || m.ID === id);

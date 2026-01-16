@@ -6,7 +6,7 @@ import {
   getTargetStores,
   buildPayload,
   extractMetricData,
-  aggregateMetrics,
+  aggregateOverviewMetrics,
 } from "@/utils/dashboardHelpers";
 import {
   Banknote,
@@ -254,9 +254,62 @@ export const useOverviewData = () => {
 
       // 2. Fetch All Stores
       const results = await Promise.all(
-        targetStores.map((s) =>
-          fetchStoreData(s.id!, s.marketplace_id || 1, dates)
-        )
+        targetStores.map(async (s) => {
+          try {
+            return await fetchStoreData(s.id!, s.marketplace_id || 1, dates);
+          } catch (error) {
+            console.warn(
+              `Failed to fetch overview metrics for store ${s.id}:`,
+              error
+            );
+            return {
+              metrics: {
+                sales: {
+                  current: 0,
+                  previous: 0,
+                  percent: 0,
+                  trend: "Equal",
+                  sparkline: [],
+                },
+                orders: {
+                  current: 0,
+                  previous: 0,
+                  percent: 0,
+                  trend: "Equal",
+                  sparkline: [],
+                },
+                visitors: {
+                  current: 0,
+                  previous: 0,
+                  percent: 0,
+                  trend: "Equal",
+                  sparkline: [],
+                },
+                cr: {
+                  current: 0,
+                  previous: 0,
+                  percent: 0,
+                  trend: "Equal",
+                  sparkline: [],
+                },
+                bs: {
+                  current: 0,
+                  previous: 0,
+                  percent: 0,
+                  trend: "Equal",
+                  sparkline: [],
+                },
+              },
+              sparklines: {
+                sales: [],
+                orders: [],
+                visitors: [],
+                conversionRate: [],
+                basketSize: [],
+              },
+            };
+          }
+        })
       );
 
       // 3. Aggregate Metrics (Summary Cards)
@@ -264,7 +317,9 @@ export const useOverviewData = () => {
       if (results.length === 1) {
         aggregatedMetrics = results[0].metrics;
       } else {
-        aggregatedMetrics = aggregateMetrics(results.map((r) => r.metrics));
+        aggregatedMetrics = aggregateOverviewMetrics(
+          results.map((r) => r.metrics)
+        );
       }
 
       // 4. Aggregate Trend Data (Chart)

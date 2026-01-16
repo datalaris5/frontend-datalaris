@@ -53,10 +53,10 @@ import {
   ChartSkeleton,
   ChartEmptyState,
   InsightBanner,
+  MetricCard,
+  MetricSelector,
 } from "@/components/dashboard";
-import MetricCard from "@/components/dashboard/MetricCard";
 import { AnimatePresence } from "framer-motion";
-import { MetricSelector } from "@/components/dashboard/MetricSelector";
 import TabToggle from "@/components/ui/TabToggle";
 import {
   aggregateData,
@@ -204,7 +204,7 @@ const DashboardAds: React.FC = () => {
         variants={fadeInUpVariants}
       >
         {isLoading
-          ? Array.from({ length: 8 }).map((_, index) => (
+          ? Array.from({ length: metrics.length }).map((_, index) => (
               <MetricCardSkeleton key={index} />
             ))
           : metrics.map((metric, index) => (
